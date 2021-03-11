@@ -5,3 +5,7 @@
 *.png
 *.pyc
 *.mp4
+Company Data Analysis/Demand_comp.ipynb
+Company Data Analysis/DHL_SC_drops.ipynb
+Company Data Analysis/Parcel_run_DHL.ipynb
+Company Data Analysis/volume_data.ipynb
