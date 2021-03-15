@@ -22,6 +22,19 @@ using Base.Threads
 const PCR_mass_protocol = "PCR_mass_testing"
 const LFD_mass_protocol = "LFD_mass_testing"
 
+#infection type definitions
+const network_contact = 1
+const non_network_contact = 2
+const room_transmission = 3
+const package_contact = 4
+const customer_contact = 5
+const introduction = 6
+const pair_contact = 7
+
+#sim type definitions
+const Outbreak_sim = 1
+const Scenario_sim = 2
+
 #VL trajectory params (Kissler)
 const alpha_onset = 1.1
 const beta_onset = 0.7
@@ -50,26 +63,26 @@ const inf_VL_cutoff = 3.0
 const pasymp_vl7 = 0.62
 const pasymp_vl89 = 0.5
 const pasymp_vl10 = 0.34
-const asymp_frac = cdf(Normal(peakVL_mean,peakVL_sd),7.0)*pasymp_vl7 + 
+const asymp_frac = cdf(Normal(peakVL_mean,peakVL_sd),7.0)*pasymp_vl7 +
     (cdf(Normal(peakVL_mean,peakVL_sd),9.0) - cdf(Normal(peakVL_mean,peakVL_sd),7.0))*pasymp_vl89 +
     (1 - cdf(Normal(peakVL_mean,peakVL_sd),9.0))*pasymp_vl10
 const mean_asymp = 0.5
 
-const per_person_office_volume = 20   #m^3
-const office_turnover = 4*24    #ventilation rate per day
-const cabin_volume = 5           #m^3
-const cabin_turnover_closed = 5*24    #ventilation rate per day
-const cabin_turnover_open = 50*24    #ventilation rate per day
-const breathing_rate = 0.72*24  #lung turnovers per day m^3
+#const per_person_office_volume = 20   #m^3
+#const office_turnover = 4*24    #ventilation rate per day
+#const cabin_volume = 5           #m^3
+#const cabin_turnover_closed = 5*24    #ventilation rate per day
+#const cabin_turnover_open = 50*24    #ventilation rate per day
+#const breathing_rate = 0.72*24  #lung turnovers per day m^3
 const isol_time = 10
 const Susc = 0
 const Expd = 1
 const Symp = 2
 const Recd = 3
 #const shift_pattern = 7     #days to draw shifts -- to be included
-const infection_rate_F2F = 0.06   #infectivity of F2F interactions per hour = microCOVID approx 
-const infection_rate_F2F_outside = 0.012   #infectivity of F2F interactions per hour = microCOVID approx 
-const infection_rate_room = 0.0015    #shared space risk per hour per infected person (assuming average 4m distance) = microCOVID approx 
+const infection_rate_F2F = 0.06   #infectivity of F2F interactions per hour = microCOVID approx
+const infection_rate_F2F_outside = 0.012   #infectivity of F2F interactions per hour = microCOVID approx
+const infection_rate_room = 0.0015    #shared space risk per hour per infected person (assuming average 4m distance) = microCOVID approx
 const t_F2F = 1.0/6.0          #Average face to face contact duration (hours)
 const t_office = 7.0
 const t_lunch = 0.75
@@ -159,10 +172,10 @@ end
 
 function generate_peak_inf(peak_VL::Float64, asymp::Bool)
     #assume reference person has average infectivity of 1 (so peak of 2)
-    value = 2.0 * inf_dep^(peak_VL - VL_ref) 
+    value = 2.0 * inf_dep^(peak_VL - VL_ref)
     ascale = mean_asymp*asymp_frac + (1 - asymp_frac)
-    r = rand(Lognormal(PImu,PIsigma))
-    if asymp 
+    r = rand(LogNormal(PImu,PIsigma))
+    if asymp
         r = mean_asymp * r
     end
     return r*value/ascale
@@ -191,9 +204,9 @@ function PCRtest_positive_prob(VL::Float64)
 end
 
 function LFDtest_positive_prob(VL::Float64, sens_rel::Float64)
-#sens rel is 1 in Peto, could scale this for sampling effects
+    #sens rel is 1 in Peto, could scale this for sampling effects
     if VL < VL_cutoff
-        return (sens_rel * swab_positive_prob(VL) / 
+        return (sens_rel * swab_positive_prob(VL) /
                (1 + exp(LFD_PDcurve_b1*VL + LFD_PDcurve_b0)))
     else
         return 0
@@ -294,6 +307,8 @@ function init(Params)
                "symp_time"=>-ones(Int64, Ntot), "asymptomatic"=>zeros(Bool, Ntot),
                "isolation_time"=>zeros(Int64, Ntot),
                "isolation_status"=>zeros(Bool, Ntot),
+               "isolation_status_test"=>zeros(Bool, Ntot),
+               "isolating_due_to_test"=>zeros(Bool, Ntot),
                "will_isolate"=>zeros(Bool, Ntot),
                "inf_mag"=>zeros(Float64, Ntot),
                "infection_profiles"=>Array{Array{Float64,1},1}(undef,Ntot),
@@ -441,6 +456,7 @@ function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int)
                                          - summary["Recovered"][j,i_day])
         summary["Exposed"][j,i_day] = sum(jt .* (sim["infection_status"] .== Expd))
         summary["Isolated"][j,i_day] = sum(jt .* (sim["isolation_status"] .== true))
+        summary["IsolatedDueToTest"][j,i_day] = sum(jt .* (sim["isolation_status_test"] .== true))
         summary["Presenting"][j,i_day] =
             sum(jt .* (sim["infection_status"] .== Symp) .* (sim["at_work"] .== true))
         summary["Asymptomatic"][j,i_day] = sum(jt .*
@@ -449,10 +465,19 @@ function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int)
 end
 
 function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int,
-                             inf_packages::Int, inf_pairs::Array{Int64,2})
+                             inf_packages::Int, inf_pairs::Array{Int64,2};
+                             CinfsD::Int = 0, CinfsP::Int = 0)
     update_sim_summary!(summary, sim, i_day)
     summary["PackagesInfectiousOnDelivery"][i_day] = inf_packages
-    summary["NFomiteInfs"][i_day] = sum(inf_pairs[1,:] .== 0)
+    summary["CustomersInfectedByPkgs"][i_day] = CinfsD
+    summary["CustomersInfectedByDrivers"][i_day] = CinfsP
+    summary["NetworkInfs"][i_day] = sum(inf_pairs[3,:] .== network_contact)
+    summary["ContactInfs"][i_day] = sum(inf_pairs[3,:] .== non_network_contact)
+    summary["RoomInfs"][i_day] = sum(inf_pairs[3,:] .== room_transmission)
+    summary["FomiteInfs"][i_day] = sum(inf_pairs[3,:] .== package_contact)
+    summary["PairInfs"][i_day] = sum(inf_pairs[3,:] .== pair_contact)
+    summary["CustomerIntroductions"][i_day] = sum(inf_pairs[3,:] .== customer_contact)
+    summary["ExternalIntroductions"][i_day] = sum(inf_pairs[3,:] .== introduction)
     summary["IndexCaseInfections"] += sum(inf_pairs[1,:] .== summary["IndexCase"])
 end
 
@@ -474,10 +499,14 @@ function update_isolation!(sim::Dict, i_day::Int)
     isolators = nr[sim["isolation_time"] .> 0]
     infisol = isolators[(i_day .== sim["isolation_time"][isolators])]
     sim["isolation_status"][infisol] .= true
+    is_test = sim["isolating_due_to_test"][infisol]
+    sim["isolation_status_test"][infisol[is_test]] .= true
+    sim["isolating_due_to_test"][infisol[is_test]] .= false #reset
     #people leaving isolation
     isols = nr[sim["isolation_status"] .== true]
     isol_leavers = isols[(i_day  .- sim["isolation_time"][isols]) .== isol_time ]
     sim["isolation_status"][isol_leavers] .= false
+    sim["isolation_status_test"][isol_leavers] .= false
 end
 
 function select_pairs(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64, Ncons::Int64)
@@ -600,7 +629,7 @@ function generate_pair_infections(sim::Dict, i_day::Int, t_pair::Array{Float64,1
                                   cabin_window::Bool=false)
 
     all_inf, all_inf_scales = get_infectivities(sim, i_day)
-    ipairs = Array{Int64,2}(undef,2,0)
+    ipairs = Array{Int64,2}(undef,3,0)
     inf_job_cat = (sim["job"][all_inf] .== job)
     if length(inf_job_cat) > 0
         inf = all_inf[inf_job_cat]
@@ -627,7 +656,7 @@ function generate_pair_infections(sim::Dict, i_day::Int, t_pair::Array{Float64,1
             j = mod(I[1][1],2) + 1
             k = I[1][2]
             if sim["infection_status"][pairs[j,k]] == Susc
-                ipairs = hcat(ipairs,[pairs[I[1][1],k]; pairs[j,k]])
+                ipairs = hcat(ipairs,[pairs[I[1][1],k]; pairs[j,k]; pair_contact])
             end
         end
     end
@@ -663,8 +692,8 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
     AllLoaders::Array{Int64,1}, InfLoaders::Array{Int64,1}, InfLoaderScales::Array{Float64,1},
     PkgParams::Dict)
 
-    InfAtPickup = Array{Int64,1}(undef,0)
-    InfAtDropoff = Array{Int64,1}(undef,0)
+    InfAtPickup = Array{Int64,2}(undef,2,0)
+    InfAtDropoff = Array{Int64,2}(undef,2,0)
     IDDriverPickup = Array{Int64,1}(undef,0)
     IDDriverDropoff = Array{Int64,1}(undef,0)
 
@@ -685,27 +714,31 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
             LIPinfected_by = zeros(Int64, length(LInfPkgs))
             nlip = 1:length(LInfPkgs)
             for i in 1:length(InfLoaders)
-                pkg_inf_prob = PkgParams["p_fomite_trans"] * InfLoaderScales[i]
+                pkg_inf_prob = 1 - exp(-PkgParams["p_fomite_trans"] * InfLoaderScales[i])
                 iLpkgs = nlip[Lah .== InfLoaders[i]]
-                Infh = randsubseq(iLpkgs, pkg_inf_prob)
+                Infh = randsubseq(iLpkgs, pkg_inf_prob)    #select infected packages
                 if length(Infh) > 0
                     LIPinfected[Infh] .= true
-                    LIPinfected_by[Infh] .= InfLoaders[i]
+                    LIPinfected_by[Infh] .= InfLoaders[i]     #track infectors
                 end
             end
-            Inf_by_L = LInfPkgs[LIPinfected]
-            L_inf = LIPinfected_by[LIPinfected]
+            Inf_by_L = LInfPkgs[LIPinfected]   #infectious packages
+            L_inf = LIPinfected_by[LIPinfected]   #infectors
             if length(Inf_by_L) > 0
                 Lth = PkgParams["Ltime"] .* rand(length(Inf_by_L))
                 sth = Lth .+ rand(Exponential(PkgParams["PkgHlife"]/log(2)), length(Inf_by_L))
                 Iapcond = (sth .> PkgParams["Ltime"])
-                InfAtPickup = Inf_by_L[Iapcond]
-                Dah = rand(AllDrivers, length(InfAtPickup))
-                d_assignment[InfAtPickup] = Dah
-                Dth = PkgParams["Dtime"] .* rand(length(InfAtPickup))
-                d_times[InfAtPickup] = Dth
+                InfAtPickup = zeros(Int64,2,sum(Iapcond))
+                InfAtPickup[1,:] = Inf_by_L[Iapcond]   #pkgs infectious at pickup
+                InfAtPickup[2,:] = L_inf[Iapcond]   #track infector
+
+                Dah = rand(AllDrivers, size(InfAtPickup,2))
+                d_assignment[InfAtPickup[1,:]] = Dah
+                Dth = PkgParams["Dtime"] .* rand(size(InfAtPickup,2))
+                d_times[InfAtPickup[1,:]] = Dth
                 Iadcond = (sth[Iapcond] .> (PkgParams["Ltime"] .+ Dth))
-                InfAtDropoff = InfAtPickup[Iadcond]
+                InfAtDropoff = zeros(Int64,2,sum(Iadcond))
+                InfAtDropoff = InfAtPickup[:,Iadcond]
             end
         end
     end
@@ -724,7 +757,7 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
             DIPinfected_by = zeros(Int64, length(DInfPkgs))
             ndip = 1:length(DInfPkgs)
             for i in 1:length(InfDrivers)
-                pkg_inf_prob = PkgParams["p_fomite_trans"]*InfDriverScales[i]
+                pkg_inf_prob = 1 - exp(-PkgParams["p_fomite_trans"]*InfDriverScales[i])
                 IDpkgs = ndip[Dah .== InfDrivers[i]]
                 Infh = randsubseq(IDpkgs, pkg_inf_prob)
                 if length(Infh) > 0
@@ -735,14 +768,17 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
             Inf_by_D = DInfPkgs[DIPinfected]
             D_inf = DIPinfected_by[DIPinfected]
             if length(Inf_by_D) > 0
-                binrand = rand(0:1, length(Inf_by_D))
+                binrand = rand(0:1, length(Inf_by_D))  #random whether the infect at pickup or dropoff
                 already_timed = (d_times[Inf_by_D] .> 0)
                 d_times[Inf_by_D[.!already_timed]] = rand(sum(.!already_timed)) .* PkgParams["Dtime"]
                 Dth = d_times[Inf_by_D]
                 Inftime = PkgParams["Ltime"] .+ binrand .* Dth
                 sth = Inftime .+ rand(Exponential(PkgParams["PkgHlife"]/log(2)), length(Inf_by_D))
                 Iadcond = sth .> (PkgParams["Ltime"] .+ Dth)
-                InfAtDropoff = unique(vcat(InfAtDropoff, Inf_by_D[Iadcond]))
+                InfAtDropoff2 = zeros(Int64,2,sum(Iadcond))
+                InfAtDropoff2[1,:] = Inf_by_D[Iadcond]
+                InfAtDropoff2[2,:] = D_inf[Iadcond]
+                InfAtDropoff = hcat(InfAtDropoff, InfAtDropoff2)
             end
         end
     end
@@ -773,23 +809,29 @@ function get_package_infections(infpairs::Array{Int64,2}, sim::Dict, NP::Int64,
         InfAtPickup, PickupAssignment, InfAtDropoff, DropoffAssignment =
             generate_infectious_packages(sim, NP, d_in_work, inf_drivers, inf_driver_scales,
                             l_in_work, inf_loaders, inf_loader_scales, PkgParams)
+        #InfAtPickup contains: first row: package number, second row: infector number
+        #same for InfAtDropoff
         #do driver infections by packages here
+        DInfectors = Array{Int64,1}(undef,0)
         DriversInfected = Array{Int64,1}(undef,0)
         if length(InfAtPickup) > 0
-            Pinfs =  randsubseq(InfAtPickup, 0.5*PkgParams["p_fomite_contr"])
+            ni = collect(1:size(InfAtPickup,2))
+            Pinfs =  randsubseq(ni, 0.5*PkgParams["p_fomite_contr"])
             for Pf in Pinfs
-                push!(DriversInfected, PickupAssignment[InfAtPickup .== Pf][1])
+                push!(DriversInfected, PickupAssignment[InfAtPickup[1,Pf]])
+                push!(DInfectors, InfAtPickup[2,Pf])
             end
         end
         if length(InfAtDropoff) > 0
-            Dinfs = randsubseq(InfAtDropoff, 0.5*PkgParams["p_fomite_contr"])
+            ni = collect(1:size(InfAtDropoff,2))
+            Dinfs =  randsubseq(ni, 0.5*PkgParams["p_fomite_contr"])
             for Df in Dinfs
-                push!(DriversInfected, DropoffAssignment[InfAtDropoff .== Df][1])
+                push!(DriversInfected, DropoffAssignment[InfAtDropoff[1,Df]])
+                push!(DInfectors, InfAtDropoff[2,Df])
             end
         end
-        DIU = unique(DriversInfected)
-        DIU = DIU[sim["infection_status"][DIU] .== Susc]
-        InfPairsNew = vcat(transpose(zeros(Int64,length(DIU))), transpose(DIU))
+        InfPairsNew = vcat(transpose(DInfectors), transpose(DriversInfected),
+                           transpose(package_contacts .* ones(length(DriversInfected))))
 
         return hcat(infpairs, InfPairsNew), InfAtDropoff, DropoffAssignment
     else
@@ -845,7 +887,8 @@ function get_package_infections(infpairs::Array{Int64,2}, sim::Dict, NP::Int64,
         if length(loader_pairs > 0)
             NLPairs = size(loader_pairs,2)
             #pairs bit
-            nlp = 1:NLPairs
+
+            nlp = (1 + length(alld)):(1 + length(alld) + NLPairs)
             lp_infs = zeros(bool,NLPairs)
             lp_scales = zeros(Float64,NLPairs)
             for (i, lp) in enumerate(loader_pairs)
@@ -878,26 +921,130 @@ function get_package_infections(infpairs::Array{Int64,2}, sim::Dict, NP::Int64,
 
         #do driver infections by packages here
         DriversInfected = Array{Int64,1}(undef,0)
+        DriversInfectors = Array{Int64,1}(undef,0)
         if length(InfAtPickup) > 0
+            nap = collect(1:size(InfAtPickup,2))
+            nad = collect(1:size(InfAtDropoff,2))
+            InfectorsAtPickup = zeros(Int64,size(InfAtPickup,2))
+            InfectorsAtDropoff = zeros(Int64,size(InfAtDropoff,2))
+
+            #bool separation of
+            nDIAP = nap[(InfAtPickup[2,:] .<= length(alld))]
+            nLIAP = nap[(InfAtPickup[2,:] .> length(alld))]
+            nDIAD = nad[(InfAtDropoff[2,:] .<= length(alld))]
+            nLIAD = nad[(InfAtDropoff[2,:] .> length(alld))]
+
             if length(driver_pairs) > 0
                 DriversExposedAtPickup = vec(driver_pairs[:,PickupAssignment])
                 DriversExposedAtDropoff = vec(driver_pairs[:,DropoffAssignment])
+                for n in nDIAP
+                    pair = driver_pairs[:,InfAtPickup[2,n]]
+                    #decide which of pair caused infection
+                    #check if one is not infectious
+                    if sim["infection_status"][pair[1]] == Susc || sim["infection_status"][pair[1]] == Recd
+                        InfectorsAtPickup[n] = pair[2]
+                    elseif sim["infection_status"][pair[2]] == Susc || sim["infection_status"][pair[2]] == Recd
+                        InfectorsAtPickup[n] = pair[1]
+                    else
+                        #otherwise choose based on relative probability they infected it
+                        p = 1 .- exp.( -PkgParams["p_fomite_trans"] .* inf_driver_scales[pair])
+                        p1rel = p[1]/(p[1] + p[2])
+                        r = rand()
+                        if r < p1rel
+                            InfectorsAtPickup[n] = pair[1]
+                        else
+                            InfectorsAtPickup[n] = pair[2]
+                        end
+                    end
+                end
+                InfectorsAtDropoff = vec(driver_pairs[:,DriverInfectorsAP])
+                for n in nDIAD
+                    pair = driver_pairs[:,InfAtDropoff[2,n]]
+                    #decide which of pair caused infection
+                    #check if one is not infectious
+                    if sim["infection_status"][pair[1]] == Susc || sim["infection_status"][pair[1]] == Recd
+                        InfectorsAtDropoff[n] = pair[2]
+                    elseif sim["infection_status"][pair[2]] == Susc || sim["infection_status"][pair[2]] == Recd
+                        InfectorsAtDropoff[n] = pair[1]
+                    else
+                        #otherwise choose based on relative probability they infected it
+                        p = 1 .- exp.( -PkgParams["p_fomite_trans"] .* inf_driver_scales[pair])
+                        p1rel = p[1]/(p[1] + p[2])
+                        r = rand()
+                        if r < p1rel
+                            InfectorsAtDropoff[n] = pair[1]
+                        else
+                            InfectorsAtDropoff[n] = pair[2]
+                        end
+                    end
+                end
             else
                 DriversExposedAtPickup = PickupAssignment
-                DriversExposedAtPickup = DropoffAssignment
+                DriversExposedAtDropoff= DropoffAssignment
+                InfectorsAtPickup[nDIAP] .= InfAtPickup[2,nDIAP]
+                InfectorsAtDropoff[nDIAD] .= InfAtDropoff[2,nDIAD]
             end
-            PDinfs = randsubseq(DriversExposedAtPickup, 0.5*PkgParams["p_fomite_contr"])
-            DDinfs = randsubseq(DriversExposedAtDropoff, 0.5*PkgParams["p_fomite_contr"])
+            if length(loader_pairs) > 0
+                for n in nLIAP
+                    pair = loader_pairs[:,InfAtPickup[2,n] - length(alld)]
+                    #decide which of pair caused infection
+                    #check if one is not infectious
+                    if sim["infection_status"][pair[1]] == Susc || sim["infection_status"][pair[1]] == Recd
+                        InfectorsAtPickup[n] = pair[2]
+                    elseif sim["infection_status"][pair[2]] == Susc || sim["infection_status"][pair[2]] == Recd
+                        InfectorsAtPickup[n] = pair[1]
+                    else
+                        #otherwise choose based on relative probability they infected it
+                        p = 1 .- exp.( -PkgParams["p_fomite_trans"] .* inf_loader_scales[pair])
+                        p1rel = p[1]/(p[1] + p[2])
+                        r = rand()
+                        if r < p1rel
+                            InfectorsAtPickup[n] = pair[1]
+                        else
+                            InfectorsAtPickup[n] = pair[2]
+                        end
+                    end
+                end
+                for n in nLIAD
+                    pair = loader_pairs[:,InfAtDropoff[2,n] - length(alld)]
+                    #decide which of pair caused infection
+                    #check if one is not infectious
+                    if sim["infection_status"][pair[1]] == Susc || sim["infection_status"][pair[1]] == Recd
+                        InfectorsAtDropoff[n] = pair[2]
+                    elseif sim["infection_status"][pair[2]] == Susc || sim["infection_status"][pair[2]] == Recd
+                        InfectorsAtDropoff[n] = pair[1]
+                    else
+                        #otherwise choose based on relative probability they infected it
+                        p = 1 .- exp.( -PkgParams["p_fomite_trans"] .* inf_loader_scales[pair])
+                        p1rel = p[1]/(p[1] + p[2])
+                        r = rand()
+                        if r < p1rel
+                            InfectorsAtDropoff[n] = pair[1]
+                        else
+                            InfectorsAtDropoff[n] = pair[2]
+                        end
+                    end
+                end
+            else
+                InfectorsAtPickup[nLIAD] .= InfAtPickup[2,nLIAP]
+                InfectorsAtDropoff[nLIAD] .= InfAtDropoff[2,nLIAD]
+            end
+
+            PDrange = 1:length(DriversExposedAtPickup)
+            PDinfs = randsubseq(PDrange, 0.5*PkgParams["p_fomite_contr"])
+            DDrange = 1:length(DriversExposedAtDropoff)
+            DDinfs = randsubseq(DDrange, 0.5*PkgParams["p_fomite_contr"])
             if length(PDinfs) > 0
-                DriversInfected = vcat(DriversInfected, PDinfs)
+                DriversInfected = vcat(DriversInfected, DriversExposedAtPickup[PDinfs])
+                DriversInfectors = vcat(DriversInfectors, InfectorsAtPickup[PDinfs])
             end
             if length(PDinfs) > 0
                 DriversInfected = vcat(DriversInfected, DDinfs)
+                DriversInfectors = vcat(DriversInfectors, InfectorsAtDropoff[DDinfs])
             end
         end
-        DIU = unique(DriversInfected)s
-        InfPairsNew = hcat(zeros(length(DIU)), DIU) #packages labelled with zeros
-
+        InfPairsNew = vcat(DriversInfectors, DriversInfected,
+                           package_contact .* ones(length(DriversInfected))) #packages labelled with zeros
 
         return hcat(infpairs, InfPairsNew), InfAtDropoff, DropoffAssignment
     else
@@ -908,7 +1055,7 @@ end
 function get_network_infections(infpairs::Array{Int64,2}, sim::Dict, Params::Dict,
                                 i_day::Int)
     inf, inf_scales = get_infectivities(sim, i_day)
-    ipairs = Array{Int64,2}(undef,2,0)
+    ipairs = Array{Int64,2}(undef,3,0)
     #collect all unique edges
     #all have different infection rates
     #get indices of all infectious edges
@@ -939,9 +1086,11 @@ function get_network_infections(infpairs::Array{Int64,2}, sim::Dict, Params::Dic
             #list all infectious contacts - even duplicates, then any nodes with
             #multiple infectors, one will be picked at random
             ipairs = hcat(ipairs, [transpose(t_nodes[sim["infection_status"][s_nodes] .== Susc]);
-                      transpose(s_nodes[sim["infection_status"][s_nodes] .== Susc])])
+                      transpose(s_nodes[sim["infection_status"][s_nodes] .== Susc]);
+                      network_contact * transpose(ones(Int64,length(s_nodes)))])
             ipairs = hcat(ipairs, [transpose(s_nodes[sim["infection_status"][t_nodes] .== Susc]);
-                      transpose(t_nodes[sim["infection_status"][t_nodes] .== Susc])])
+                      transpose(t_nodes[sim["infection_status"][t_nodes] .== Susc]);
+                      network_contact * transpose(ones(Int64,length(s_nodes)))])
         end
     end
      #susceptibles
@@ -954,7 +1103,7 @@ function get_contact_infections(infpairs::Array{Int64,2}, sim::Dict, Params::Dic
     #for those who are infectious and in work, generate contacts randomly with susceptibles
     #with given probability, ignore contacts between infectious cases (although these
     #are implied, just not explicitly simulated)
-    ipairs = Array{Int64,2}(undef,2,0)
+    ipairs = Array{Int64,2}(undef,3,0)
     if length(inf) > 0
         nr = 1:sim["Ntot"]
         nS = nr[(sim["infection_status"] .== Susc) .* (sim["at_work"])]
@@ -979,7 +1128,8 @@ function get_contact_infections(infpairs::Array{Int64,2}, sim::Dict, Params::Dic
             infectees2 = nS[rand(length(nS)) .<  p2]
             if length(infectees) > 0
                 ipairs = hcat(ipairs, [i*transpose(ones(Int64,length(infectees)));
-                                      transpose(infectees)])
+                                      transpose(infectees);
+                                      non_network_contacts*transpose(ones(Int64,length(infectees)))])
             end
         end
     end
@@ -988,9 +1138,11 @@ end
 
 
 function get_customer_infections(infpairs::Array{Int64,2}, sim::Dict, Params::Dict,
-                                i_day::Int, prevalence::Float64=0.0)
-    #customers labelled with minus 1
-    #just count outward infections
+                                i_day::Int)
+    #TODO
+
+
+
 end
 
 function do_infections_randomly!(infpairs::Array{Int,2}, sim::Dict, i_day::Int)
@@ -1035,20 +1187,20 @@ function init_testing!(sim::Dict, testing_params::Dict, i_day::Int, Ndays::Int)
             sim["test_pos_profiles"][i] = LFDtest_positive_prob.(sim["VL_profiles"][i], Ref(sr))
         end
     end
-    
-#     if testing_params["type"] == "PCR"
-#         for i in 1:sim["Ntot"]
-#             sim["test_pos_profiles"][i] = calculate_testpos_distribution(sim["VL_mag"][i],
-#             sim["symp_time"][i], sim["shedding_rates"][i], testing_params["sens_max"],
-#             testing_params["VL_ref"], testing_params["VL_disp"])
-#         end
-#     else
-#         for i in 1:sim["Ntot"]
-#             sim["test_pos_profiles"][i] = calculate_testpos_distribution(
-#                   sim["infection_profiles"][i],testing_params["sens_max"],
-#                   testing_params["VL_ref"], testing_params["VL_disp"])
-#         end
-#     end
+
+    #     if testing_params["type"] == "PCR"
+    #         for i in 1:sim["Ntot"]
+    #             sim["test_pos_profiles"][i] = calculate_testpos_distribution(sim["VL_mag"][i],
+    #             sim["symp_time"][i], sim["shedding_rates"][i], testing_params["sens_max"],
+    #             testing_params["VL_ref"], testing_params["VL_disp"])
+    #         end
+    #     else
+    #         for i in 1:sim["Ntot"]
+    #             sim["test_pos_profiles"][i] = calculate_testpos_distribution(
+    #                   sim["infection_profiles"][i],testing_params["sens_max"],
+    #                   testing_params["VL_ref"], testing_params["VL_disp"])
+    #         end
+    #     end
 
     return test_days, test_day_counter
 end
@@ -1096,6 +1248,7 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
                        (sim["isolation_time"][will_isolate] .> isol_day)))
     to_update = will_isolate[bool_update_isol_time]
     sim["isolation_time"][to_update] .= isol_day[bool_update_isol_time]
+    sim["isolating_due_to_test"][to_update] .= true
     sim["testing_paused"][will_isolate] .= true
     sim["resume_testing"][will_isolate] .= i_day + testing_params["delay"] +
                                            testing_params["test_pause"]
@@ -1216,11 +1369,22 @@ function sim_setup!(sim::Dict, InfInit::Int64, i_day::Int64, Ndays::Int64)
                   "Infectious"=>zeros(Int64,(3,Ndays)),
                   "Exposed"=>zeros(Int64,(3,Ndays)),
                   "Isolated"=>zeros(Int64,(3,Ndays)),
+                  "IsolatedDueToTest"=>zeros(Int64,(3,Ndays)),
                   "Presenting"=>zeros(Int64,(3,Ndays)),
                   "Asymptomatic"=>zeros(Int64,(3,Ndays)),
                   "Recovered"=>zeros(Int64,(3,Ndays)),
                   "PackagesInfectiousOnDelivery"=>zeros(Int64,Ndays),
-                  "NFomiteInfs"=>zeros(Int64,Ndays),
+                  "FomiteInfs"=>zeros(Int64,Ndays),
+                  "CustomersInfectedByPkgs"=>zeros(Int64,Ndays),
+                  "CustomersInfectedByDrivers"=>zeros(Int64,Ndays),
+                  "NetworkInfs"=>zeros(Int64,Ndays),
+                  "ContactInfs"=>zeros(Int64,Ndays),
+                  "RoomInfs"=>zeros(Int64,Ndays),
+                  "FomiteInfs"=>zeros(Int64,Ndays),
+                  "PairInfs"=>zeros(Int64,Ndays),
+                  "CustomerIntroductions"=>zeros(Int64,Ndays),
+                  "ExternalIntroductions"=>zeros(Int64,Ndays),
+                  "IndexCaseInfections"=>zeros(Int64,Ndays),
                   "IndexCase"=>index_case, "IndexCaseInfections" => 0,
                   "IndexCaseInfectivity"=>sim["inf_mag"][index_case],
                   "IndexCasePeakVL"=>sim["VL_mag"][index_case])
@@ -1240,9 +1404,12 @@ function sim_loop!(sim::Dict, sim_summary::Dict, i_day::Int, occ::Float64,  np::
         do_testing!(sim, TestParams, i_day)
     end
     update_isolation!(sim, i_day)
-    infpairs = Array{Int64,2}(undef,2,0)
+    infpairs = Array{Int64,2}(undef,3,0)
     driver_pairs = Array{Int64,2}(undef,2,0)
     loader_pairs = Array{Int64,2}(undef,2,0)
+    if sim["Prevalence"][i_day] > 0
+       infpairs = get_introductions(infpairs, sim, i_day)
+    end
     if is_pairs
         infpairs, driver_pairs, loader_pairs = get_pair_infections(infpairs,
                                                   sim, occ, i_day, PairParams)
@@ -1256,8 +1423,9 @@ function sim_loop!(sim::Dict, sim_summary::Dict, i_day::Int, occ::Float64,  np::
         infpairs = get_network_infections(infpairs, sim, Params, i_day)
     end
     infpairs = get_contact_infections(infpairs, sim, Params, i_day)
+    infpairs, cust_infections = get_customer_infections(infpairs, sim, Params, i_day)
     infpairs = do_infections_randomly!(infpairs, sim, i_day)
-    update_sim_summary!(sim_summary, sim, i_day+1, length(infected_pkgs), infpairs)
+    update_sim_summary!(sim_summary, sim, i_day+1, length(infected_pkgs), infpairs, cust_infections)
 
     return infpairs, hcat(driver_pairs, loader_pairs)
 end
@@ -1276,33 +1444,40 @@ function trim_sim_summary!(sim_summary, i_day, Ndays)
     end
 end
 
-#run a single outbreak with 1 initial case
-function run_outbreak_sim(Params::Dict, OccPerDay::Array{Float64,1},
+#run a either single outbreak with 1 initial case, or a sim with no cases but introductions
+function run_sim(Params::Dict, OccPerDay::Array{Float64,1},
      PkgParams::Dict, NPPerDay::Array{Int64,1}; is_pairs::Bool=false,
      PairParams::Dict=Dict(), is_network::Bool=false, degree_logmean::Float64=1.67,
      degree_logstd::Float64=0.97, visualise::Bool = false, testing::Bool=false,
-     testing_params::Dict=Dict())
+     TestParams::Dict=Dict(), Prevalence::Array{Float64,1} = zeros(length(OccPerDay)))
 
     if visualise
         sim, node_x, node_y = initialise_withvis(Params,
-          PairParams, degree_logmean, degree_logstd, is_network, is_pairs)
+          PairParams, degree_logmean, degree_logstd, is_network, is_pairs, Prevalence)
     else
         sim = initialise_novis(Params,
-          PairParams, degree_logmean, degree_logstd, is_network, is_pairs)
+          PairParams, degree_logmean, degree_logstd, is_network, is_pairs, Prevalence)
     end
     i_day = rand(1:7)
     if testing
-        test_days, test_day_counter = init_testing!(sim,testing_params,i_day,length(OccPerDay))
+        if (TestParams["protocol"] == PCR_mass_protocol || TestParams["protocol"] == LFD_mass_protocol)
+            test_days, test_day_counter = init_testing!(sim,TestParams,i_day,length(OccPerDay))
+        end  #add options for other protocols here
     else
         test_day_counter = 1
         test_days = [0]
     end
-    sim_summary = sim_setup!(sim, Params["InfInit"], i_day, length(OccPerDay))
-    Anyinf = any(((sim["infection_status"] .== Susc)
+    Anyinf = true
+    if Params["SimType"] == Outbreak_sim
+        sim_summary = sim_setup!(sim, Params["InfInit"], i_day, length(OccPerDay))
+        Anyinf = any(((sim["infection_status"] .== Susc)
               .+ (sim["infection_status"] .== Recd)) .== 0)
+    elseif Params["SimType"] == Scenario_sim
+        sim_summary = scenario_sim_setup!(sim, Prevalence, i_day, length(OccPerDay))
+    end
     while Anyinf && (i_day <= length(OccPerDay))
         infpairs, pairs = sim_loop!(sim, sim_summary, i_day, OccPerDay[i_day],
-                                    NPPerDay[i_day], Params, PkgParams, PairParams, testing_params,
+                                    NPPerDay[i_day], Params, PkgParams, PairParams, TestParams,
                                     is_pairs, is_network, testing, test_days[test_day_counter])
         if testing && (i_day == test_days[test_day_counter])
             test_day_counter += 1
@@ -1311,252 +1486,13 @@ function run_outbreak_sim(Params::Dict, OccPerDay::Array{Float64,1},
         if visualise
             print_infection_network(sim, fname, infpairs, node_x, node_y, pairs)
         end
-        Anyinf = any(((sim["infection_status"] .== Susc)
+        if Params["SimType"] == Outbreak_sim
+            Anyinf = any(((sim["infection_status"] .== Susc)
                   .+ (sim["infection_status"] .== Recd)) .== 0)
+        end
         i_day += 1
     end
     trim_sim_summary!(sim_summary, i_day, length(OccPerDay))
 
     return sim_summary
-end
-
-function init_results_dataframe(Nrows::Int, AllParams::Dict)
-    results = DataFrame([String, Int64, Int64, Float64,
-                         Int64, Int64, Float64, Int64],
-                         [:Group, :NStaff, :Iteration, :FracRecovered,
-                         :TotInfPackagesDelivered, :IndexCaseInfections,
-                         :FomiteInfectionFrac, :OverallOutbreakLength], Nrows)
-    for p in keys(AllParams)
-        if p != "ND" && p != "NO" && p != "NL"
-            results[!,p] = fill(AllParams[p], Nrows)
-        end
-    end
-
-    return results
-end
-
-function add_to_results_dataframe!(results::DataFrame, Params::Dict, SimOutput::Dict,
-                                   irow_start::Int, Niteration::Int)
-
-    #params and results common to all staff
-    for p in keys(Params)
-        if p in names(results)
-            results[(irow_start):(irow_start+3),p] .= Params[p]
-        end
-    end
-    results[(irow_start):(irow_start+3),"Iteration"] .= Niteration
-    results[(irow_start):(irow_start+3), "TotInfPackagesDelivered"] .=
-                                 sum(SimOutput["PackagesInfectiousOnDelivery"])
-    results[(irow_start):(irow_start+3),"IndexCaseInfections"] .= SimOutput["IndexCaseInfections"]
-    results[(irow_start):(irow_start+3),"OverallOutbreakLength"] .= length(SimOutput["time"])
-    #CONTINUE HERE
-    #params and results for specific staff groups
-    results[(irow_start),"Group"] = "Drivers"
-    results[(irow_start), "NStaff"] = Params["ND"]
-    results[(irow_start),"FracRecovered"] = SimOutput["Recovered"][1,end] / Params["ND"]
-    results[(irow_start),"FomiteInfectionFrac"] = SimOutput["NFomiteInfs"][1]/Params["ND"]
-    results[(irow_start+1),"Group"] = "Pickers"
-    results[(irow_start+1), "NStaff"] = Params["NL"]
-    results[(irow_start+1),"FracRecovered"] = SimOutput["Recovered"][2,end] / Params["NL"]
-    results[(irow_start+1),"FomiteInfectionFrac"] = SimOutput["NFomiteInfs"][2]/Params["NL"]
-    results[(irow_start+2),"Group"] = "Office"
-    results[(irow_start+2), "NStaff"] = Params["NO"]
-    results[(irow_start+2),"FracRecovered"] = SimOutput["Recovered"][3,end] / Params["NO"]
-    results[(irow_start+2),"FomiteInfectionFrac"] = SimOutput["NFomiteInfs"][3] / Params["NO"]
-    results[(irow_start+3),"Group"] = "All"
-    NStot = Params["ND"] + Params["NL"] + Params["NO"]
-    results[(irow_start+3), "NStaff"] = NStot
-    results[(irow_start+3),"FracRecovered"] = sum(SimOutput["Recovered"][:,end]) / NStot
-    results[(irow_start+3),"FomiteInfectionFrac"] = sum(SimOutput["NFomiteInfs"]) / NStot
-end
-
-function run_param_sweeps_simplest(ParamsVec::Array{Dict,1}, Nrepeats::Int; filename="output.csv",
-                PkgParams::Dict = Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
-                                 "Ltime"=>1/6, "PkgHlife"=>0.5),
-                NPPerDay::Array{Int64,1} = zeros(Int64, length(OccPerDay)))
-
-     NParamSets = length(ParamsVec)
-     Nrows = 3*NParamSets*Nrepeats
-     results = init_results_dataframe(Nrows)
-
-     i_step = 3*Nrepeats
-     for (i, Params) in enumerate(ParamVec)
-         i_ind_start = (i-1)*i_step
-         @threads for n in 1:Nrepeats
-             index_start = i_ind_start + (n-1)*3
-             out = run_outbreak_sim(Params, OccPerDay, PkgParams, NPPerDay)
-             add_to_results_dataframe!(results, Params, out, index_start, n)
-         end
-     end
-
-     CSV.write(filename, results)
-     return results
-end
-
-function run_param_sweeps_simplest(ND::Int, NL::Int, NO::Int, p_asymp::Float64,
-        OccPerDay::Array{Float64,1}, PIsol::Array{Float64,1}, PInf::Array{Float64,1},
-        PContact::Array{Float64,1}, TD::Array{Float64,1}, Phi::Array{Float64,1},
-        Nrepeats::Int, InfInit::Int; filename="output.csv", pf_trans::Float64=0.0,
-        pf_contr::Float64=0.0, Dtime::Float64=1/6, Ltime::Float64=1/6, Hlife::Float64=0.5,
-        NPPerDay::Array{Int64,1} = zeros(Int64, length(OccPerDay)))
-     NPIsol = length(PIsol)
-     NPInf = length(PInf)
-     NPC = length(PContact)
-     NPhi = length(Phi)
-     NTD = length(TD)
-     Nrows = NPIsol*NPInf*NPC*NPhi*NTD*Nrepeats*3
-     results = DataFrame([Float64,Float64,Float64,Float64,Float64,Int64,String,Float64,
-                          Float64],
-                         [:Isolation_Prob, :Infection_Prob, :Contact_Prob,
-                          :Driver_Mixing_Time, :Mixing_Param, :Iteration,
-                          :Group, :Frac_recovered, :Inf_packages_delivered], Nrows)
-     Params = Dict("ND"=>ND, "NL"=>NL, "NO"=>NO, "InfInit"=>InfInit)
-     PkgParams = Dict("p_fomite_contr"=>pf_contr, "p_fomite_trans"=>pf_trans,
-                       "PkgHlife"=>Hlife, "Dtime"=>Dtime, "Ltime"=>Ltime)
-     m_step = 3*Nrepeats
-     l_step = NPhi*m_step
-     k_step = NTD*l_step
-     j_step = NPC*k_step
-     i_step = NPInf*j_step
-     for (i, p_isol) in enumerate(PIsol)
-         Params["Pisol"] = p_isol
-         i_ind_start = (i-1)*i_step
-         results[(i_ind_start + 1):(i_ind_start + i_step),"Isolation_Prob"] .= p_isol
-         for (j, p_inf) in enumerate(PInf)
-             Params["p_inf"] = p_inf
-             j_ind_start = i_ind_start + (j-1)*j_step
-             results[(j_ind_start+1):(j_ind_start+j_step), "Infection_Prob"] .= p_inf
-             for (k, p_contact) in enumerate(PContact)
-                 Params["p_contact"] = p_contact
-                 k_ind_start = j_ind_start + (k-1)*k_step
-                 results[(k_ind_start+1):(k_ind_start + k_step), "Contact_Prob"] .= p_contact
-                 for (l, tD) in enumerate(TD)
-                     Params["tD"] = tD
-                     l_ind_start = k_ind_start + (l-1)*l_step
-                     results[(l_ind_start+1):(l_ind_start + l_step), "Driver_Mixing_Time"] .= tD
-                     for (m, phi) in enumerate(Phi)
-                         Params["phi"] = phi
-                         m_ind_start = l_ind_start + (m-1)*m_step
-                         print(Int64(m_ind_start/m_step)+1,'/', Int64(Nrows/m_step),'\n')
-                         results[(m_ind_start+1):(m_ind_start+m_step), "Mixing_Param"] .= phi
-                         @threads for n in 1:Nrepeats
-                             index_start = m_ind_start + (n-1)*3
-                             out = run_outbreak_sim(Params, OccPerDay, PkgParams,
-                                                NPPerDay)
-                             results[(index_start+1):(index_start+3), "Iteration"] .= n
-                             results[index_start+1, "Frac_recovered"] = out["Recovered"][1,end]/ND
-                             results[index_start+2, "Frac_recovered"] = out["Recovered"][2,end]/NL
-                             results[index_start+3, "Frac_recovered"] = out["Recovered"][3,end]/NO
-                             if pf_trans > 0
-                                results[(index_start+1):(index_start+3),
-                                      "Inf_packages_delivered"] .=
-                                          sum(out["PackagesInfectiousOnDelivery"])
-                             else
-                                results[(index_start+1):(index_start+3),
-                                      "Inf_packages_delivered"] .= 0
-                             end
-                         end
-                    end
-                end
-            end
-        end
-     end
-     results[:, "Group"] .= repeat(job_names, Int64(Nrows/3))
-
-     CSV.write(filename, results)
-     return results
-end
-
-function run_param_sweeps_pairs(ND::Int, NL::Int, NO::Int, p_asymp::Float64,
-        p_inf::Float64, p_contact::Float64, tD::Float64, OccPerDay::Array{Float64,1},
-        PIsol::Array{Float64,1}, Phi::Array{Float64,1}, Nrepeats::Int, InfInit::Int;
-        filename="output.csv", pf_trans::Float64=0.0, pf_contr::Float64=0.0,
-        Dtime::Float64=1/6, Ltime::Float64=1/6, Hlife::Float64=0.5,
-        NPPerDay::Array{Int64,1} = zeros(Int64, length(OccPerDay)))
-     NPIsol = length(PIsol)
-     NPhi = length(Phi)
-     NPPerDay = zeros(Int64, length(OccPerDay))
-     Nrows = NPIsol*NPhi*Nrepeats*4*3
-     results = DataFrame([Float64,Float64,Float64,Float64,Float64,Float64,
-                          Float64,Int64,String,Float64,Float64],
-                         [:Isolation_Prob, :Infection_Prob, :Contact_Prob,
-                          :Driver_Mixing_Time, :Mixing_Param, :D_pairs_fixed,
-                          :L_pairs_fixed, :Iteration, :Group, :Frac_recovered,
-                          :Inf_packages_delivered], Nrows)
-     Params = Dict("ND"=>ND, "NL"=>NL, "NO"=>NO, "InfInit"=>InfInit,
-                   "p_inf"=>p_inf, "p_contact"=>p_contact, "tD"=>tD)
-     PkgParams = Dict("p_fomite_contr"=>pf_contr, "p_fomite_trans"=>pf_trans,
-                       "PkgHlife"=>Hlife, "Dtime"=>Dtime, "Ltime"=>Ltime)
-     PairParams = Dict("is_loader_pairs"=>true,"is_driver_pairs"=>true)
-     k_step = 3*Nrepeats
-     j_step = NPhi*k_step
-     i_step = NPIsol*j_step
-     for (i, psetup) in enumerate([(False,False),(False,True),(True,False),(True,True)])
-         i_ind_start = (i-1)*i_step
-         PairParams["fixed_driver_pairs"] = psetup[1]
-         PairParams["fixed_loader_pairs"] = psetup[2]
-         results[(i_ind_start + 1):(i_ind_start + i_step),"D_pairs_fixed"] .= psetup[1]
-         results[(i_ind_start + 1):(i_ind_start + i_step),"L_pairs_fixed"] .= psetup[2]
-         for (j, p_isol) in enumerate(PIsol)
-             Params["Pisol"] = p_isol
-             j_ind_start = i_ind_start + (j-1)*j_step
-             results[(j_ind_start + 1):(j_ind_start + j_step),"Isolation_Prob"] .= p_isol
-             for (k, phi) in enumerate(Phi)
-                 Params["phi"] = phi
-                 k_ind_start = j_ind_start + (k-1)*k_step
-                 results[(k_ind_start+1):(k_ind_start + k_step), "Mixing_Param"] .= phi
-                 @threads for n in 1:Nrepeats
-                     index_start = k_ind_start + (n-1)*3
-                     out = run_outbreak_sim(Params, OccPerDay, PkgParams,
-                                                NPPerDay)
-                     results[(index_start+1):(index_start+3), "Iteration"] = n
-                     results[index_start+1, "Frac_recovered"] = out["Recovered"][1,end]/ND
-                     results[index_start+2, "Frac_recovered"] = out["Recovered"][2,end]/NL
-                     results[index_start+3, "Frac_recovered"] = out["Recovered"][3,end]/NO
-                     if pf_trans > 0
-                        results[(index_start+1):(index_start+3),
-                                      "Inf_packages_delivered"] .=
-                                          np.sum(out["PackagesInfectiousOnDelivery"])
-                     else
-                        results[(index_start+1):(index_start+3),
-                                      "Inf_packages_delivered"] .= 0
-                     end
-                end
-            end
-        end
-     end
-
-     results[:, "Group"] .= repeat(job_names..., Int64(Nrows/3))
-
-     CSV.write(filename, results)
-     return results
-end
-
-function run_param_sweeps_testing_network(ParamsVec::Array{Dict,1}, Nrepeats::Int,
-                TestingParamVec::Array{Dict,1}, OccPerDay::Array{Float64,1}; filename="output.csv",
-                PkgParams::Dict = Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
-                                 "Ltime"=>1/6, "PkgHlife"=>0.5),
-                NPPerDay::Array{Int64,1} = zeros(Int64, length(OccPerDay)))
-
-     NParamSets = length(ParamsVec)
-     Nrows = 4*NParamSets*Nrepeats
-     TestParams = merge(ParamsVec[1],TestingParamVec[1])
-
-     results = init_results_dataframe(Nrows, TestParams)
-
-     i_step = 4*Nrepeats
-     for (i, Params) in enumerate(ParamsVec)
-         i_ind_start = (i-1)*i_step + 1
-         print(i,'\n')
-         @threads for n in 1:Nrepeats
-             index_start = i_ind_start + (n-1)*4
-             out = run_outbreak_sim(Params, OccPerDay, PkgParams, NPPerDay;
-                   is_network=true, testing=true, testing_params=TestingParamVec[i])
-             AllParams = merge(Params, TestingParamVec[i])
-             add_to_results_dataframe!(results, AllParams, out, index_start, n)
-         end
-     end
-
-     CSV.write(filename, results)
-     return results
 end
