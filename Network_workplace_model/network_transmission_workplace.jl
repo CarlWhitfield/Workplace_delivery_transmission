@@ -470,7 +470,7 @@ function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int)
         isol_false_test = (sim["isolation_status_false_test"] .== true)
         summary["IsolatedDueToTestAsymp"][j,i_day] = sum(jt .* isol_true_test .* (sim["asymptomatic"] .== true))
         summary["IsolatedDueToTestSymp"][j,i_day] = sum(jt .* isol_true_test .* (sim["asymptomatic"] .== false))
-        summary["IsolatedDueToFalsePos"][j,i_day] = sum(jt .* isol_true_test .* (sim["asymptomatic"] .== false))
+        summary["IsolatedDueToFalsePos"][j,i_day] = sum(jt .* isol_false_test)
 
         summary["Presenting"][j,i_day] =
             sum(jt .* (sim["infection_status"] .== Symp) .* (sim["at_work"] .== true))
@@ -484,8 +484,8 @@ function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int,
                              CinfsD::Int = 0, CinfsP::Int = 0)
     update_sim_summary!(summary, sim, i_day)
     summary["PackagesInfectiousOnDelivery"][i_day] = inf_packages
-    summary["CustomersInfectedByPkgs"][i_day] = CinfsD
-    summary["CustomersInfectedByDrivers"][i_day] = CinfsP
+    summary["CustomersInfectedByPkgs"][i_day] = CinfsP
+    summary["CustomersInfectedByDrivers"][i_day] = CinfsD
     nr = 1:sim["Ntot"]
     if haskey(summary,"IndexCaseInfections")
         summary["IndexCaseInfections"] += sum(inf_pairs[1,:] .== summary["IndexCase"])
@@ -545,7 +545,7 @@ function select_pairs(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64, Nc
     TotPairs = Int64(sim["N"][job]/2)
     nr = 1:sim["Ntot"]
     jobgroup = nr[sim["job"] .== job]
-    is_available = (sim["infection_status"][jobgroup] .!= Isol)
+    is_available = .!(sim["isolation_status"][jobgroup])
     available = jobgroup[is_available]
     NJ = min(Int64(floor(0.5*length(available))*2), Int64(round(0.5*occ*sim["N"][job])*2))
     NP = Int64(NJ/2)
@@ -598,9 +598,9 @@ end
 
 function update_in_work!(sim::Dict, occ::Float64, Ncons::Int64,
                 driver_pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0),
-                driver_cons::Array{Int64,2} = Array{Int64,1}(undef,0),
+                driver_cons::Array{Int64,1} = Array{Int64,1}(undef,0),
                 loader_pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0),
-                loader_cons::Array{Int64,2} = Array{Int64,1}(undef,0))
+                loader_cons::Array{Int64,1} = Array{Int64,1}(undef,0))
     #wih driver pairs
     nr = 1:sim["Ntot"]
     sim["at_work"] = zeros(Bool,sim["Ntot"])
@@ -615,8 +615,8 @@ function update_in_work!(sim::Dict, occ::Float64, Ncons::Int64,
     end
     if length(loader_pairs) > 0
         sim["at_work"][vec(loader_pairs)] .= true
-        NLAs[loader_pairs[1,:]] .= loader_cons
-        NLAs[loader_pairs[2,:]] .= loader_cons
+        NAs[loader_pairs[1,:]] .= loader_cons
+        NAs[loader_pairs[2,:]] .= loader_cons
     else
         push!(to_select,2)
     end
@@ -689,17 +689,17 @@ function generate_pair_infections(sim::Dict, i_day::Int, t_pair::Array{Float64,1
         p1 = zeros(length(inf))
         p2 = zeros(length(inf))
         for (i_inf, infp) in enumerate(inf)
-            pair_col = (pairs[1,:] .== infp) + (pairs[2,:] .== infp)
-            p1[i_inf] = infection_rate_F2F_outside .* t_pair[pair_col]
+            pair_col = Bool.((pairs[1,:] .== infp) + (pairs[2,:] .== infp))
+            p1[i_inf] = infection_rate_F2F_outside * t_pair[pair_col][1]
             ir = infection_rate_F2F
             if cabin_window
                 ir = infection_rate_F2F_outside
             end
             if length(t_cabin) > 0
-                 p2[i_inf] = ir .* t_cabin[pair_col]
+                 p2[i_inf] = ir * t_cabin[pair_col][1]
              end
         end
-        iprob = 1.0 - exp.(-inf_scales .* (p1 + p2))
+        iprob = 1.0 .- exp.(-inf_scales .* (p1 + p2))
         #randomly select those that infect partner
         pair_infs = inf[rand(length(inf)) .< (iprob)]
         for p in pair_infs
@@ -718,21 +718,21 @@ function get_pair_infections(infpairs::Array{Int64,2}, sim::Dict, occ::Float64,
                             i_day::Int, PairParams::Dict, Ncons::Int64)
     dpairs = Array{Int64,2}(undef,2,0)
     lpairs = Array{Int64,2}(undef,2,0)
-    NDPassignemnts = Array{Int64,1}(undef,0)
-    NLPassignemnts = Array{Int64,1}(undef,0)
+    NDPassignments = Array{Int64,1}(undef,0)
+    NLPassignments = Array{Int64,1}(undef,0)
     if PairParams["is_driver_pairs"]
-        dpairs, NDPassignemnts = select_pairs(sim, occ, PairParams["fixed_driver_pairs"], 1, Ncons)
+        dpairs, NDPassignments = select_pairs(sim, occ, PairParams["fixed_driver_pairs"], 1, Ncons)
     end
     if PairParams["is_loader_pairs"]
-        lpairs, NLPassignemnts = select_pairs(sim, occ, PairParams["fixed_loader_pairs"], 2, Ncons)
+        lpairs, NLPassignments = select_pairs(sim, occ, PairParams["fixed_loader_pairs"], 2, Ncons)
     end
-    NAs = update_in_work!(sim, occ, dpairs, NDPassignemnts, lpairs, NLPassignemnts)
-    ips = generate_pair_infections(sim, NDPassignemnts .* (BulkTimesPerDelivery["t_handling"] +
-          BulkTimesPerDelivery["t_doorstep"]), i_day, dpairs, 1, NDPassignemnts .* PairParams["t_cabin"],
-          PairParams["is_window_open"])
+    NAs = update_in_work!(sim, occ, Ncons, dpairs, NDPassignments, lpairs, NLPassignments)
+    ips = generate_pair_infections(sim, i_day, NDPassignments .* (BulkTimesPerDelivery["t_handling"] +
+          BulkTimesPerDelivery["t_doorstep"]), dpairs, 1,
+          NDPassignments .* BulkTimesPerDelivery["t_cabin"],  PairParams["is_window_open"])
     InfPairsNew = hcat(infpairs,ips)
-    ips = generate_pair_infections(sim, NLPassignments .* BulkTimesPerDelivery["t_picking"],
-                                 i_day, lpairs, 2)
+    ips = generate_pair_infections(sim, i_day, NLPassignments .* BulkTimesPerDelivery["t_picking"],
+                                     lpairs, 2)
 
 
     InfPairsNew = hcat(InfPairsNew,ips)
@@ -755,7 +755,7 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
 
     # l_assignment = zeros(Int64,NP) #assigns potentially infectious packages to loaders or loader pairs
     # d_assignment = zeros(Int64,NP)
-    NPavailable = 1:NP
+    NPavailable = collect(1:NP)
     #generate packages infected by loaders
     if length(InfLoaders) > 0
         #now InfLoaders either contains infectious loaders or loader pairs
@@ -777,8 +777,8 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
                     sth = Lth .+ rand(Exponential(PkgParams["PkgHlife"]/log(2)), Infh)
                     Iapcond = (sth .> PkgParams["Ltime"])  #check if infectious at pickup
                     if sum(Iapcond) > 0
-                        push!(InfectorAtPickup,InfLoaders[i]*ones(Int64,sum(Iapcond)))  #push back number infectious at pickup
-                        push!(StimesAtPickup, sth[Iapcond])
+                        InfectorAtPickup = vcat(InfectorAtPickup,InfLoaders[i]*ones(Int64,sum(Iapcond)))  #push back number infectious at pickup
+                        StimesAtPickup = vcat(StimesAtPickup, sth[Iapcond])
                         PDAgen = sample(NPavailable, sum(Iapcond), replace=false)  #generate package number
                         filter!(eh -> !(eh in PDAgen), NPavailable)  #remove PDAgen from NP available
                         Nd = 1:length(AllDrivers)
@@ -804,20 +804,21 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
                 iDpkgs = NAs[AllDrivers[i]]
                 Dtimes = zeros(iDpkgs)
                 Stimes = zeros(iDpkgs)  #store sterilisation time of all packages delivered (0 if uninfected)
+                Ilast = zeros(Int64,iDpkgs)
                 #add those infected by loaders (that are infectious at pickup)
                 IAPbool = (IDDriverPickup .== AllDrivers[i])
                 NLAPs = sum(IAPbool)
                 if NLAPs > 0   #just assign these as first NLAPs parcels
                     Stimes[1:NLAPs] .= StimesAtPickup[IAPbool]
-                    Dtimes[1:NLAPs] .= PkgParams["Ltime"] .+ rand(NLAps) .* PkgParams["Dtime"]
+                    Dtimes[1:NLAPs] .= PkgParams["Ltime"] .+ rand(NLAPs) .* PkgParams["Dtime"]
                     Ilast[1:NLAPs] .= InfectorAtPickup[IAPbool]
                 end
                 #add infected by drivers
                 if AllDrivers[i] in InfDrivers
-                    j = collect(1:length(InfDrivers))[AllDrivers[i] == InfDrivers][1]
+                    j = collect(1:length(InfDrivers))[AllDrivers[i] .== InfDrivers][1]
                     pkg_inf_prob = 1 - exp(-PkgParams["p_fomite_trans"] * InfDriverScales[j])
                     Infh = rand(Binomial(iDpkgs, pkg_inf_prob))    #get no, of infected packages
-                    NDIPinfected[i] = Infh
+                    NDIPinfected[j] = Infh
                     if Infh > 0
                         #generate package numbers of those infected by drivers
                         NPinfh = sample(1:iDpkgs, Infh, replace=false)
@@ -828,16 +829,16 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
                         sth = InfTime .+ rand(Exponential(PkgParams["PkgHlife"]/log(2)), Infh)
                         update_sts_bool = (sth .> Stimes[NPinfh])
                         if sum(update_sts_bool) > 0
-                            Stimes[update_sts_bool] .= sth[update_sts_bool]
-                            Dtimes[update_sts_bool] .= PkgParams["Ltime"] .+ rand(sum(update_sts_bool)) .* PkgParams["Dtime"]
-                            Ilast[update_sts_bool] .= AllDrivers[i]
+                            Stimes[NPinfh[update_sts_bool]] .= sth[update_sts_bool]
+                            Dtimes[NPinfh[update_sts_bool]] .= PkgParams["Ltime"] .+ rand(sum(update_sts_bool)) .* PkgParams["Dtime"]
+                            Ilast[NPinfh[update_sts_bool]] .= AllDrivers[i]
                         end
                     end
                 end
                 IADbool = (Stimes .> 0) .* (Stimes .> Dtimes)
                 if sum(IADbool) > 0
-                    push!(InfectorAtDropoff,Ilast[IADbool])
-                    push!(IDDriverDropoff,AllDrivers[i]*ones(Int64,sum(IADbool)))
+                    InfectorAtDropoff = vcat(InfectorAtDropoff,Ilast[IADbool])
+                    IDDriverDropoff = vcat(IDDriverDropoff,AllDrivers[i]*ones(Int64,sum(IADbool)))
                 end
             end
         end
@@ -887,7 +888,7 @@ function get_package_infections(infpairs::Array{Int64,2}, sim::Dict, NP::Int64,
             end
         end
         InfPairsNew = vcat(transpose(DInfectors), transpose(DriversInfected),
-                           transpose(package_contacts .* ones(length(DriversInfected))))
+                           transpose(package_contact .* ones(Int64, length(DriversInfected))))
 
         return hcat(infpairs, InfPairsNew), InfectorsAtDropoff, DropoffAssignment
     else
@@ -1215,8 +1216,8 @@ function get_customer_infections(infpairs::Array{Int64,2}, sim::Dict, Params::Di
     pkg_infections = Array{Int64,2}(undef,2,0)
     nr = 1:sim["Ntot"]
     d_in_work = nr[(sim["at_work"]) .* (sim["job"] .== 1)]
+    p_pos = sim["Prevalence"][i_day] * (1 - exp(-infection_rate_F2F*t_del))
     for id in d_in_work
-        p_pos = sim["Prevalence"][i_day] * (1 - exp(-infection_rate_F2F*t_del))
         #assmue every contact has the same probability
         dinfs = randsubseq(1:Nassignments[id], p_pos)
         if length(dinfs) > 0
@@ -1231,7 +1232,7 @@ function get_customer_infections(infpairs::Array{Int64,2}, sim::Dict, Params::Di
             end
         end
     end
-
+    # print(contact_infections,'\n')
     #infectious packages
     pkg_infs = randsubseq(1:length(InfPkgs), PkgParams["p_fomite_contr"])
     infectors = unique(InfPkgs[pkg_infs])
@@ -1242,7 +1243,7 @@ function get_customer_infections(infpairs::Array{Int64,2}, sim::Dict, Params::Di
             pkg_infections[2,j] = sum(InfPkgs[pkg_infs] .== infectors[j])
         end
     end
-
+    infpairs = hcat(infpairs, ipairs)
     #infpairs contains incoming infections in usual format
     #contact infections: first row infectors, second row number of customers infected
     #pkg infections: first row infectors, second row number of customers infected
@@ -1368,13 +1369,15 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
     isol_day = Int64.(round.(i_day + testing_params["delay"] .+ rand([0,0.5],length(will_isolate))))
     bool_update_isol_time = Bool.(((sim["isolation_time"][will_isolate] .== 0) .+
                        (sim["isolation_time"][will_isolate] .> isol_day)))
+    # print(isol_day,'\n')
+    # print(sim["isolation_time"][will_isolate],'\n')
     to_update = will_isolate[bool_update_isol_time]
     sim["isolation_time"][to_update] .= isol_day[bool_update_isol_time]
     for ip in to_update
-        if sim["infection_status"][ip] == Susc || sim["infection_status"][ip] == Expd
-            sim["isolating_due_to_true_test"][ip] = true
-        else
+        if sim["infection_status"][ip] == Susc || sim["infection_status"][ip] == Recd
             sim["isolating_due_to_false_test"][ip] = true
+        else
+            sim["isolating_due_to_true_test"][ip] = true
         end
     end
 
@@ -1592,14 +1595,13 @@ function sim_loop!(sim::Dict, sim_summary::Dict, i_day::Int, occ::Float64,  np::
     else
         t_del = ParcelTimesPerDelivery["t_doorstep"]
     end
-
     infpairs, cust_infections_drivers, cust_infections_packages =
          get_customer_infections(infpairs, sim, Params, PkgParams,
                                  NAs, t_del, vcat(transpose(drivers_delivering_ipkgs),
                                  transpose(pkg_infectors)), i_day)
 
 
-
+    # print(sum(cust_infections_drivers[2,:]),'\n')
 
     infpairs = do_infections_randomly!(infpairs, sim, i_day)
     update_sim_summary!(sim_summary, sim, i_day, length(pkg_infectors), infpairs;
