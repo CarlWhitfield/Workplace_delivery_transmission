@@ -131,26 +131,62 @@ function run_param_sweep_outbreak_parcel()
     ContactsPerDay = 2
     pc = ContactsPerDay/(NDh+NLh+NOh)
     #other params
-    PIsol = 0.2:0.2:1.0
-    PFC = 0.25:0.25:1.0
+    PIsol = 0.2
+    PFC = 1.0
     II = [1,2,3]
-    tD = 0.1:0.3:1.0
+    tD = 0.05:0.05:1.0
+    Phi = 0.05:0.05:1.0
     Nrepeats = 1000
 
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgParams = Array{Dict{Any,Any},1}(undef,0)
-    for pi in PIsol
-        for pf in PFC
-            for ii in II
-                for td in tD
-                    push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
-                                         "p_contact"=>pc, "Pisol"=>pi,
-                                         "InfInit"=>ii, "tD"=>td, "phi"=>0.1,
-                                         "p_friend_contact"=>pf, "SimType"=>Outbreak_sim))
-                    push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+    for phi in Phi
+        for ii in II
+            for td in tD
+                push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                                    "p_contact"=>pc, "Pisol"=>PIsol,
+                                    "InfInit"=>ii, "tD"=>td, "phi"=>phi,
+                                    "p_friend_contact"=>PFC, "SimType"=>Outbreak_sim))
+                push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
                                  "Ltime"=>1/6, "PkgHlife"=>0.5))
-                end
+            end
+        end
+    end
+
+    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; filename="param_sweep.csv")
+end
+
+function run_presenteeism_param_sweep_outbreak_parcel()
+    NWeeks= 52
+    NPh = 3000
+    OccPattern = repeat([0.87,1.0,1.0,0.98,0.91,0.55,0],NWeeks)
+    NPvec = Int64.(round.(NPh*OccPattern))
+    NDh = Int64(round(NPh/80))
+    NLh = Int64(round(NPh/150))
+    NOh = Int64(round(NPh/300))
+    ContactsPerDay = 2
+    pc = ContactsPerDay/(NDh+NLh+NOh)
+    #other params
+    PIsol = 0.05:0.05:1.0
+    PFC = [0.25,0.5,1.0]
+    II = [1,2,3]
+    tD = 0.5
+    Phi = 0.1
+    Nrepeats = 10000
+
+
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    for pfc in PFC
+        for ii in II
+            for pi in PISol
+                push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                                    "p_contact"=>pc, "Pisol"=>pi,
+                                    "InfInit"=>ii, "tD"=>tD, "phi"=>Phi,
+                                    "p_friend_contact"=>pfc, "SimType"=>Outbreak_sim))
+                push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                                 "Ltime"=>1/6, "PkgHlife"=>0.5))
             end
         end
     end
