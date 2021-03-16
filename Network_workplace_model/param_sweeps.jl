@@ -72,7 +72,7 @@ end
 #Check this works
 function run_many_sims(ParamsVec::Array{Dict,1}, Nrepeats::Int,
                 OccPerDay::Array{Float64,1}, PkgParams::Array{Dict,1};
-                NPPerDay::Array{Int64,1} = zeros(Int64, length(OccPerDay))
+                NPPerDay::Array{Int64,1} = zeros(Int64, length(OccPerDay)),
                 IsNetwork::Array{Bool,1} = ones(Bool,length(ParamsVec)),
                 IsPairs::Array{Bool,1} = zeros(Bool,length(ParamsVec)),
                 PairParams::Array{Dict,1} = fill(Dict(),length(ParamsVec)),
