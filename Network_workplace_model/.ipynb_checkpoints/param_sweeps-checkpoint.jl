@@ -2,10 +2,17 @@ include("network_transmission_workplace.jl")
 
 function init_results_dataframe(Nrows::Int, AllParams::Dict)
     results = DataFrame([String, Int64, Int64, Float64,
-                         Int64, Int64, Float64, Int64],
+                         Int64, Float64],
                          [:Group, :NStaff, :Iteration, :FracRecovered,
-                         :TotInfPackagesDelivered, :IndexCaseInfections,
-                         :FomiteInfectionFrac, :OverallOutbreakLength], Nrows)
+                         :TotInfPackagesDelivered, :FomiteInfectionFrac, 
+                         :NetworkInfectionFrac, :ContactInfectionFrac,
+                         :PairInfectionFrac, :RoomInfectionFrac], Nrows)
+    
+    if AllParams["sim_type"] == Outbreak_sim      
+            :IndexCaseInfections,
+                         :OverallOutbreakLength,
+                        
+    end
     for p in keys(AllParams)
         if p != "ND" && p != "NO" && p != "NL"
             results[!,p] = fill(AllParams[p], Nrows)
@@ -25,10 +32,11 @@ function add_to_results_dataframe!(results::DataFrame, Params::Dict, SimOutput::
         end
     end
     results[(irow_start):(irow_start+3),"Iteration"] .= Niteration
-    results[(irow_start):(irow_start+3), "TotInfPackagesDelivered"] .=
-                                 sum(SimOutput["PackagesInfectiousOnDelivery"])
-    results[(irow_start):(irow_start+3),"IndexCaseInfections"] .= SimOutput["IndexCaseInfections"]
-    results[(irow_start):(irow_start+3),"OverallOutbreakLength"] .= length(SimOutput["time"])
+    if Params["sim_type"] == Outbreak_sim
+        results[(irow_start):(irow_start+3),"IndexCaseInfections"] .= SimOutput["IndexCaseInfections"]
+        results[(irow_start):(irow_start+3),"OverallOutbreakLength"] .= length(SimOutput["time"])
+    end
+    
     #CONTINUE HERE
     #params and results for specific staff groups
     results[(irow_start),"Group"] = "Drivers"
@@ -47,87 +55,22 @@ function add_to_results_dataframe!(results::DataFrame, Params::Dict, SimOutput::
     NStot = Params["ND"] + Params["NL"] + Params["NO"]
     results[(irow_start+3), "NStaff"] = NStot
     results[(irow_start+3),"FracRecovered"] = sum(SimOutput["Recovered"][:,end]) / NStot
-    results[(irow_start+3),"FomiteInfectionFrac"] = sum(SimOutput["NFomiteInfs"]) / NStot
-end
-
-#needs updating to new format
-function run_param_sweeps_simplest(ND::Int, NL::Int, NO::Int, p_asymp::Float64,
-        OccPerDay::Array{Float64,1}, PIsol::Array{Float64,1}, PInf::Array{Float64,1},
-        PContact::Array{Float64,1}, TD::Array{Float64,1}, Phi::Array{Float64,1},
-        Nrepeats::Int, InfInit::Int; filename="output.csv", pf_trans::Float64=0.0,
-        pf_contr::Float64=0.0, Dtime::Float64=1/6, Ltime::Float64=1/6, Hlife::Float64=0.5,
-        NPPerDay::Array{Int64,1} = zeros(Int64, length(OccPerDay)))
-     NPIsol = length(PIsol)
-     NPInf = length(PInf)
-     NPC = length(PContact)
-     NPhi = length(Phi)
-     NTD = length(TD)
-     Nrows = NPIsol*NPInf*NPC*NPhi*NTD*Nrepeats*3
-     results = DataFrame([Float64,Float64,Float64,Float64,Float64,Int64,String,Float64,
-                          Float64],
-                         [:Isolation_Prob, :Infection_Prob, :Contact_Prob,
-                          :Driver_Mixing_Time, :Mixing_Param, :Iteration,
-                          :Group, :Frac_recovered, :Inf_packages_delivered], Nrows)
-     Params = Dict("ND"=>ND, "NL"=>NL, "NO"=>NO, "InfInit"=>InfInit)
-     PkgParams = Dict("p_fomite_contr"=>pf_contr, "p_fomite_trans"=>pf_trans,
-                       "PkgHlife"=>Hlife, "Dtime"=>Dtime, "Ltime"=>Ltime)
-     m_step = 3*Nrepeats
-     l_step = NPhi*m_step
-     k_step = NTD*l_step
-     j_step = NPC*k_step
-     i_step = NPInf*j_step
-     for (i, p_isol) in enumerate(PIsol)
-         Params["Pisol"] = p_isol
-         i_ind_start = (i-1)*i_step
-         results[(i_ind_start + 1):(i_ind_start + i_step),"Isolation_Prob"] .= p_isol
-         for (j, p_inf) in enumerate(PInf)
-             Params["p_inf"] = p_inf
-             j_ind_start = i_ind_start + (j-1)*j_step
-             results[(j_ind_start+1):(j_ind_start+j_step), "Infection_Prob"] .= p_inf
-             for (k, p_contact) in enumerate(PContact)
-                 Params["p_contact"] = p_contact
-                 k_ind_start = j_ind_start + (k-1)*k_step
-                 results[(k_ind_start+1):(k_ind_start + k_step), "Contact_Prob"] .= p_contact
-                 for (l, tD) in enumerate(TD)
-                     Params["tD"] = tD
-                     l_ind_start = k_ind_start + (l-1)*l_step
-                     results[(l_ind_start+1):(l_ind_start + l_step), "Driver_Mixing_Time"] .= tD
-                     for (m, phi) in enumerate(Phi)
-                         Params["phi"] = phi
-                         m_ind_start = l_ind_start + (m-1)*m_step
-                         print(Int64(m_ind_start/m_step)+1,'/', Int64(Nrows/m_step),'\n')
-                         results[(m_ind_start+1):(m_ind_start+m_step), "Mixing_Param"] .= phi
-                         @threads for n in 1:Nrepeats
-                             index_start = m_ind_start + (n-1)*3
-                             out = run_outbreak_sim(Params, OccPerDay, PkgParams,
-                                                NPPerDay)
-                             results[(index_start+1):(index_start+3), "Iteration"] .= n
-                             results[index_start+1, "Frac_recovered"] = out["Recovered"][1,end]/ND
-                             results[index_start+2, "Frac_recovered"] = out["Recovered"][2,end]/NL
-                             results[index_start+3, "Frac_recovered"] = out["Recovered"][3,end]/NO
-                             if pf_trans > 0
-                                results[(index_start+1):(index_start+3),
-                                      "Inf_packages_delivered"] .=
-                                          sum(out["PackagesInfectiousOnDelivery"])
-                             else
-                                results[(index_start+1):(index_start+3),
-                                      "Inf_packages_delivered"] .= 0
-                             end
-                         end
-                    end
-                end
-            end
-        end
-     end
-     results[:, "Group"] .= repeat(job_names, Int64(Nrows/3))
-
-     CSV.write(filename, results)
-     return results
+    results[(irow_start+3),"FomiteInfectionFrac"] = sum(SimOutput["FomiteInfs"]) / NStot
+    results[(irow_start+3),"NetworkInfectionFrac"] = sum(SimOutput["NetworkInfs"]) / NStot
+    results[(irow_start+3),"ContactInfectionFrac"] = sum(SimOutput["ContactInfs"]) / NStot
+    results[(irow_start+3),"PairInfectionFrac"] = sum(SimOutput["PairInfs"]) / NStot
+    results[(irow_start+3),"RoomInfectionFrac"] = sum(SimOutput["RoomInfs"]) / NStot
+    results[(irow_start+3),"CustomerIntroFrac"] = sum(SimOutput["CustomerIntroductions"]) / NStot
+    results[(irow_start+3),"ExtIntroFrac"] = sum(SimOutput["ExternalIntroductions"]) / NStot
+    results[(irow_start+3),"TotInfPackagesDelivered"] = sum(SimOutput["PackagesInfectiousOnDelivery"])
+    results[(irow_start+3), "CustomerInfectionsPkgs"] .= sum(SimOutput["CustomersInfectedByPkgs"])
+    results[(irow_start+3), "CustomerInfectionsDrivers"] .= sum(SimOutput["CustomersInfectedByDrivers"])
+    results[(irow_start+3), "IsolFrac"] .= sum(SimOutput["Isolated"])/(NStot * isol_time)
+    results[(irow_start+3), "IsolTestFrac"] .= sum(SimOutput["IsolatedDueToTest"])/(NStot * isol_time)
 end
 
 
-
-
+#Check this works
 function run_many_sims(ParamsVec::Array{Dict,1}, Nrepeats::Int,
                 OccPerDay::Array{Float64,1}, PkgParams::Array{Dict,1};
                 NPPerDay::Array{Int64,1} = zeros(Int64, length(OccPerDay))
@@ -161,9 +104,7 @@ function run_many_sims(ParamsVec::Array{Dict,1}, Nrepeats::Int,
      return results
 end
 
-
-
-function run_param_sweep_outbreak()
+function run_param_sweep_outbreak_parcel()
     NWeeks= 52
     NPh = 3000
     OccPattern = repeat([0.87,1.0,1.0,0.98,0.91,0.55,0],NWeeks)
@@ -198,7 +139,7 @@ function run_param_sweep_outbreak()
         end
     end
 
-    run_param_sweeps_network(ParamVec, Nrepeats, OccPattern; filename="param_sweep.csv")
+    run_many_sims(ParamVec, Nrepeats, OccPattern; filename="param_sweep.csv")
 end
 
 function run_testing_script()
@@ -244,5 +185,5 @@ function run_testing_script()
         end
     end
 
-    run_param_sweeps_testing_network(ParamVec, Nrepeats, TestParamVec, OccPattern; filename="testing_loops.csv")
+    run_many_sims(ParamVec, Nrepeats, TestParamVec, OccPattern; filename="testing_loops.csv")
 end

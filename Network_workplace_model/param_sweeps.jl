@@ -104,9 +104,7 @@ function run_many_sims(ParamsVec::Array{Dict,1}, Nrepeats::Int,
      return results
 end
 
-
-
-function run_param_sweep_outbreak()
+function run_param_sweep_outbreak_parcel()
     NWeeks= 52
     NPh = 3000
     OccPattern = repeat([0.87,1.0,1.0,0.98,0.91,0.55,0],NWeeks)
@@ -141,7 +139,7 @@ function run_param_sweep_outbreak()
         end
     end
 
-    run_param_sweeps_network(ParamVec, Nrepeats, OccPattern; filename="param_sweep.csv")
+    run_many_sims(ParamVec, Nrepeats, OccPattern; filename="param_sweep.csv")
 end
 
 function run_testing_script()
@@ -187,5 +185,5 @@ function run_testing_script()
         end
     end
 
-    run_param_sweeps_testing_network(ParamVec, Nrepeats, TestParamVec, OccPattern; filename="testing_loops.csv")
+    run_many_sims(ParamVec, Nrepeats, TestParamVec, OccPattern; filename="testing_loops.csv")
 end
