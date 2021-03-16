@@ -456,6 +456,14 @@ end
 
 function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int)
     nr = 1:sim["Ntot"]
+    isolator_bool = (sim["isolation_status"] .== true)
+    new_isolator_bool = isolator_bool .* (sim["isolation_time"] .== i_day)
+    isol_true_test = (sim["isolation_status_true_test"] .== true)
+    isol_false_test = (sim["isolation_status_false_test"] .== true)
+    isol_no_test = (.!(isol_true_test) .* .!(isol_true_test))
+    asymp_bool = (sim["asymptomatic"] .== true)
+    inf_bool = (sim["infection_status"] .== Symp)
+    at_work_bool = (sim["at_work"] .== true)
     for j in 1:3
         jt = (sim["job"] .== j)
 
@@ -464,18 +472,22 @@ function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int)
         summary["Infectious"][j,i_day] = (sum(jt) - summary["Susceptible"][j,i_day]
                                          - summary["Recovered"][j,i_day])
         summary["Exposed"][j,i_day] = sum(jt .* (sim["infection_status"] .== Expd))
-        summary["Isolated"][j,i_day] = sum(jt .* (sim["isolation_status"] .== true))
+        summary["Isolated"][j,i_day] = sum(jt .* isolator_bool)
+        summary["NewIsolators"][j,i_day] = sum(jt .* new_isolator_bool)
 
-        isol_true_test = (sim["isolation_status_true_test"] .== true)
-        isol_false_test = (sim["isolation_status_false_test"] .== true)
-        summary["IsolatedDueToTestAsymp"][j,i_day] = sum(jt .* isol_true_test .* (sim["asymptomatic"] .== true))
-        summary["IsolatedDueToTestSymp"][j,i_day] = sum(jt .* isol_true_test .* (sim["asymptomatic"] .== false))
+
+        summary["IsolatedDueToSymptoms"][j,i_day] = sum(jt .* isol_no_test)
+        summary["IsolatedDueToTestAsymp"][j,i_day] = sum(jt .* isol_true_test .* asymp_bool)
+        summary["IsolatedDueToTestSymp"][j,i_day] = sum(jt .* isol_true_test .* .!(asymp_bool))
         summary["IsolatedDueToFalsePos"][j,i_day] = sum(jt .* isol_false_test)
 
-        summary["Presenting"][j,i_day] =
-            sum(jt .* (sim["infection_status"] .== Symp) .* (sim["at_work"] .== true))
-        summary["Asymptomatic"][j,i_day] = sum(jt .*
-                (sim["infection_status"] .== Symp) .* (sim["asymptomatic"] .== true))
+        summary["NewSympIsolators"][j,i_day] = sum(jt .* isol_no_test .* new_isolator_bool)
+        summary["NewTestAsympIsolators"][j,i_day] = sum(jt .* isol_true_test .* new_isolator_bool .* asymp_bool)
+        summary["NewTestSympIsolators"][j,i_day] = sum(jt .* isol_true_test .* new_isolator_bool .* .!(asymp_bool))
+        summary["NewFalseIsolators"][j,i_day] = sum(jt .* isol_false_test .* new_isolator_bool)
+
+        summary["Presenting"][j,i_day] = sum(jt .* inf_bool .* at_work_bool)
+        summary["Asymptomatic"][j,i_day] = sum(jt .* inf_bool .* asymp_bool)
     end
 end
 
@@ -1207,7 +1219,6 @@ function get_contact_infections(infpairs::Array{Int64,2}, sim::Dict, Params::Dic
     return hcat(infpairs, ipairs)
 end
 
-
 function get_customer_infections(infpairs::Array{Int64,2}, sim::Dict, Params::Dict,
                                  PkgParams::Dict, Nassignments::Array{Int64,1},
                                  t_del::Float64, InfPkgs::Array{Int64,2}, i_day::Int)
@@ -1501,9 +1512,15 @@ function sim_setup!(sim::Dict, InfInit::Int64, i_day::Int64, Ndays::Int64)
                   "Infectious"=>zeros(Int64,(3,Ndays)),
                   "Exposed"=>zeros(Int64,(3,Ndays)),
                   "Isolated"=>zeros(Int64,(3,Ndays)),
+                  "IsolatedDueToSymptoms"=>zeros(Int64,(3,Ndays)),
                   "IsolatedDueToTestAsymp"=>zeros(Int64,(3,Ndays)),
                   "IsolatedDueToTestSymp"=>zeros(Int64,(3,Ndays)),
                   "IsolatedDueToFalsePos"=>zeros(Int64,(3,Ndays)),
+                  "NewIsolators"=>zeros(Int64,(3,Ndays)),
+                  "NewSympIsolators"=>zeros(Int64,(3,Ndays)),
+                  "NewTestAsympIsolators"=>zeros(Int64,(3,Ndays)),
+                  "NewTestSympIsolators"=>zeros(Int64,(3,Ndays)),
+                  "NewFalseIsolators"=>zeros(Int64,(3,Ndays)),
                   "Presenting"=>zeros(Int64,(3,Ndays)),
                   "Asymptomatic"=>zeros(Int64,(3,Ndays)),
                   "Recovered"=>zeros(Int64,(3,Ndays)),
@@ -1536,9 +1553,15 @@ function scenario_sim_setup!(sim::Dict, inc::Array{Float64,1}, prev::Array{Float
                   "Infectious"=>zeros(Int64,(3,Ndays)),
                   "Exposed"=>zeros(Int64,(3,Ndays)),
                   "Isolated"=>zeros(Int64,(3,Ndays)),
+                  "IsolatedDueToSymptoms"=>zeros(Int64,(3,Ndays)),
                   "IsolatedDueToTestAsymp"=>zeros(Int64,(3,Ndays)),
                   "IsolatedDueToTestSymp"=>zeros(Int64,(3,Ndays)),
                   "IsolatedDueToFalsePos"=>zeros(Int64,(3,Ndays)),
+                  "NewIsolators"=>zeros(Int64,(3,Ndays)),
+                  "NewSympIsolators"=>zeros(Int64,(3,Ndays)),
+                  "NewTestAsympIsolators"=>zeros(Int64,(3,Ndays)),
+                  "NewTestSympIsolators"=>zeros(Int64,(3,Ndays)),
+                  "NewFalseIsolators"=>zeros(Int64,(3,Ndays)),
                   "Presenting"=>zeros(Int64,(3,Ndays)),
                   "Asymptomatic"=>zeros(Int64,(3,Ndays)),
                   "Recovered"=>zeros(Int64,(3,Ndays)),
