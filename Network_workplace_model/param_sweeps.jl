@@ -132,7 +132,6 @@ function run_param_sweep_outbreak_parcel()
     pc = ContactsPerDay/(NDh+NLh+NOh)
     #other params
     PIsol = 0.2:0.2:1.0
-    Phi = [0.05,0.1,0.25,0.5,1.0]
     PFC = 0.25:0.25:1.0
     II = [1,2,3]
     tD = 0.1:0.3:1.0
@@ -144,10 +143,10 @@ function run_param_sweep_outbreak_parcel()
     for pi in PIsol
         for pf in PFC
             for ii in II
-                for i in 1:3
+                for td in tD
                     push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
                                          "p_contact"=>pc, "Pisol"=>pi,
-                                         "InfInit"=>ii, "tD"=>tD[i], "phi"=>Phi[i],
+                                         "InfInit"=>ii, "tD"=>td, "phi"=>0.1,
                                          "p_friend_contact"=>pf, "SimType"=>Outbreak_sim))
                     push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
                                  "Ltime"=>1/6, "PkgHlife"=>0.5))

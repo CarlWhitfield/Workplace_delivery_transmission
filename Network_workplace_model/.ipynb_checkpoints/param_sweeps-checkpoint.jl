@@ -3,17 +3,17 @@ include("network_transmission_workplace.jl")
 function init_results_dataframe(Nrows::Int, AllParams::Dict)
     results = DataFrame([String, Int64, Int64, Float64,
                          Int64, Float64, Float64, Float64, Float64,
-                         Float64, Float64, Float64, Int64, Int64, 
+                         Float64, Float64, Float64, Int64, Int64,
                          Float64, Float64, Float64, Float64, Float64],
                          [:Group, :NStaff, :Iteration, :FracRecovered,
-                         :TotInfPackagesDelivered, :FomiteInfectionFrac, 
+                         :TotInfPackagesDelivered, :FomiteInfectionFrac,
                          :NetworkInfectionFrac, :ContactInfectionFrac,
-                         :PairInfectionFrac, :RoomInfectionFrac, 
+                         :PairInfectionFrac, :RoomInfectionFrac,
                          :ExtIntroFrac, :CustIntroFrac, :CustomersInfectedByPkg,
                          :CustomersInfectedByDrivers, :IsolatorsFrac, :SympIsolatorsFrac,
                          :FPIsolatorsFrac, :TPSympIsolatorsFrac, :TPAsympIsolatorsFrac], Nrows)
-    
-    if AllParams["SimType"] == Outbreak_sim      
+
+    if AllParams["SimType"] == Outbreak_sim
         results.IndexCaseInfections = zeros(Int64,Nrows)
         results.OverallOutbreakLength = zeros(Int64,Nrows)
     end
@@ -40,7 +40,7 @@ function add_to_results_dataframe!(results::DataFrame, Params::Dict, SimOutput::
         results[(irow_start):(irow_start+3),"IndexCaseInfections"] .= SimOutput["IndexCaseInfections"]
         results[(irow_start):(irow_start+3),"OverallOutbreakLength"] .= length(SimOutput["time"])
     end
-    
+
     #CONTINUE HERE
     #params and results for specific staff groups
 
@@ -63,7 +63,7 @@ function add_to_results_dataframe!(results::DataFrame, Params::Dict, SimOutput::
         results[(irow_start + i - 1),"TPSympIsolatorsFrac"] = sum(SimOutput["NewTestSympIsolators"][i,:])/ Nh[i]
         results[(irow_start + i - 1),"TPAsympIsolatorsFrac"] = sum(SimOutput["NewTestAsympIsolators"][i,:])/ Nh[i]
     end
-    
+
     results[(irow_start+3),"Group"] = "All"
     NStot = Params["ND"] + Params["NL"] + Params["NO"]
     results[(irow_start+3), "NStaff"] = NStot
@@ -131,11 +131,10 @@ function run_param_sweep_outbreak_parcel()
     ContactsPerDay = 2
     pc = ContactsPerDay/(NDh+NLh+NOh)
     #other params
-    PIsol = [0.25,0.5,0.75,1.0]
-    Phi = [0.05,0.25,1.0]
-    PFC = [0.5,1.0]
+    PIsol = 0.2:0.2:1.0
+    PFC = 0.25:0.25:1.0
     II = [1,2,3]
-    tD = [0.1, 0.5, 1.0]
+    tD = 0.1:0.3:1.0
     Nrepeats = 1000
 
 
@@ -144,10 +143,10 @@ function run_param_sweep_outbreak_parcel()
     for pi in PIsol
         for pf in PFC
             for ii in II
-                for i in 1:3
+                for td in tD
                     push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
                                          "p_contact"=>pc, "Pisol"=>pi,
-                                         "InfInit"=>ii, "tD"=>tD[i], "phi"=>Phi[i], 
+                                         "InfInit"=>ii, "tD"=>td, "phi"=>0.1,
                                          "p_friend_contact"=>pf, "SimType"=>Outbreak_sim))
                     push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
                                  "Ltime"=>1/6, "PkgHlife"=>0.5))
