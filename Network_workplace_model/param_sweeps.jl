@@ -9,9 +9,8 @@ function init_results_dataframe(Nrows::Int, AllParams::Dict)
                          :PairInfectionFrac, :RoomInfectionFrac], Nrows)
     
     if AllParams["sim_type"] == Outbreak_sim      
-            :IndexCaseInfections,
-                         :OverallOutbreakLength,
-                        
+        insertcols!(results,[:IndexCaseInfections, :OverallOutbreakLength] => 
+                             zeros(Int64,Nrows))         
     end
     for p in keys(AllParams)
         if p != "ND" && p != "NO" && p != "NL"
