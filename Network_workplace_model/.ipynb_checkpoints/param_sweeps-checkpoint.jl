@@ -123,6 +123,7 @@ function run_param_sweep_outbreak_parcel()
 
 
     ParamVec = Array{Dict,1}(undef,0)
+    PkgParams = Array{Dict,1}(undef,0)
     for pi in PIsol
         for pf in PFC
             for ii in II
@@ -131,14 +132,14 @@ function run_param_sweep_outbreak_parcel()
                                          "p_contact"=>pc, "Pisol"=>pi,
                                          "InfInit"=>ii, "tD"=>tD[i], "phi"=>Phi[i], 
                                          "p_friend_contact"=>pf, "type"=>Outbreak_sim))
-                    PkgParams = Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
-                                 "Ltime"=>1/6, "PkgHlife"=>0.5)
+                    push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                                 "Ltime"=>1/6, "PkgHlife"=>0.5))
                 end
             end
         end
     end
 
-    run_many_sims(ParamVec, Nrepeats, OccPattern; filename="param_sweep.csv")
+    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; filename="param_sweep.csv")
 end
 
 function run_testing_script()
@@ -168,6 +169,7 @@ function run_testing_script()
 
     ParamVec = Array{Dict,1}(undef,0)
     TestParamVec = Array{Dict,1}(undef,0)
+    PkgParams = Array{Dict,1}(undef,0)
     for pi in PIsol
         for ncp in NCP
             for tp in Tperiod
@@ -179,10 +181,13 @@ function run_testing_script()
                           "type"=>TestType[i], "VL_ref"=>VL_ref[i], "VL_disp"=>VL_disp[i],
                           "sens_max"=>Sens_max[i], "specificity"=>0.995,
                           "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
+                    push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                                 "Ltime"=>1/6, "PkgHlife"=>0.5))
                 end
             end
         end
     end
 
-    run_many_sims(ParamVec, Nrepeats, TestParamVec, OccPattern; filename="testing_loops.csv")
+    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; IsTesting=ones(Bool,length(ParamVec)),
+                  TestingParams=TestParamVec, filename="testing_loops.csv")
 end
