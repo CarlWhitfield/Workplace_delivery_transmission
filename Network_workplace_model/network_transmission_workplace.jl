@@ -30,6 +30,9 @@ const package_contact = 4
 const customer_contact = 5
 const introduction = 6
 const pair_contact = 7
+const edge_colours = [colorant"red", colorant"red", colorant"green", colorant"orange",
+                      colorant"white",colorant"white",colorant"blue",colorant"lightgrey"]
+
 
 #sim type definitions
 const Outbreak_sim = 1
@@ -98,11 +101,17 @@ const job_names = ["Drivers","Pickers","Other"]
 const job_colours = [colorant"blue",colorant"orange",colorant"green"]
 const stat_labels = ["S","I","R"]
 const stat_colours = [colorant"white", colorant"red",colorant"blue"]
-const inf_labels = ["S","E","Q","A","P","R"]
-const inf_colours = [colorant"white", colorant"orange", colorant"green",
-                     colorant"purple", colorant"red", colorant"blue"]
-const edge_labels = ["F","P","I"]  #types of edge: friend, driver pair, or infection
-const edge_colours = [colorant"lightgrey", colorant"yellow", colorant"red"]
+
+const susceptible_ref = 1
+const inf_ref = 2
+const recovered_ref = 3
+const not_at_work_ref = 4
+const isolating_ref = 5
+const inf_colours = [colorant"lightgrey",colorant"red",colorant"blue",colorant"black",colorant"purple"]
+
+
+
+
 
 # function gamma_ab(mean::Float64, var::Float64)
 #     #get gamma alpha beta from mean & var
@@ -1421,13 +1430,13 @@ function print_infection_network(sim::Dict, fname::String, infpairs::Array{Int64
         ges = collect(Graphs.edges(sim["social_graph"]))
         LightGraphs.add_edge!.(Ref(lg), Graphs.source.(ges), Graphs.target.(ges))
     end
-    if length(pairs) > 0
-        for i in 1:size(pairs,2)
-            if !LightGraphs.has_edge(lg,pairs[1,i],pairs[2,i])
-                LightGraphs.add_edge!(lg,pairs[1,i],pairs[2,i])
-            end
-        end
-    end
+    # if length(pairs) > 0
+    #     for i in 1:size(pairs,2)
+    #         if !LightGraphs.has_edge(lg,pairs[1,i],pairs[2,i])
+    #             LightGraphs.add_edge!(lg,pairs[1,i],pairs[2,i])
+    #         end
+    #     end
+    # end
     for i in 1:size(infpairs,2)
         if !LightGraphs.has_edge(lg,infpairs[1,i],infpairs[2,i])
             LightGraphs.add_edge!(lg,infpairs[1,i],infpairs[2,i])
@@ -1437,34 +1446,33 @@ function print_infection_network(sim::Dict, fname::String, infpairs::Array{Int64
     mg = MetaGraphs.MetaGraph(lg)
     if haskey(sim, "social_graph")
         for e in ges
-            set_prop!(mg, LightGraphs.Edge(Graphs.source(e), Graphs.target(e)), :color, 1)
+            set_prop!(mg, LightGraphs.Edge(Graphs.source(e), Graphs.target(e)), :color, length(edge_colours))
         end
     end
-    if length(pairs) > 0
-        for i in 1:size(pairs,2)
-            set_prop!(mg, LightGraphs.Edge(pairs[1,i], pairs[2,i]), :color, 2)
-        end
-    end
+    # if length(pairs) > 0
+    #     for i in 1:size(pairs,2)
+    #         set_prop!(mg, LightGraphs.Edge(pairs[1,i], pairs[2,i]), :color, 2)
+    #     end
+    # end
     for i in 1:size(infpairs,2)
         if infpairs[1,i] > 0 &&  infpairs[2,i] > 0
-            set_prop!(mg, LightGraphs.Edge(infpairs[1,i], infpairs[2,i]), :color, 3)
+            set_prop!(mg, LightGraphs.Edge(infpairs[1,i], infpairs[2,i]), :color, infpairs[3,i])
         end
     end
     ecolors = zeros(Int8,ne(lg))
     for (j,e) in enumerate(LightGraphs.edges(lg))
         ecolors[j] = get_prop(mg,e,:color)
     end
-
     #inflabels = 2 .* ones(Int8,sim["Ntot"])
     #inflabels[sim["infection_status"] .== Susc] .= 1
     #inflabels[sim["infection_status"] .== Recd] .= 3
     #here
-    inflabels = ones(Int8,sim["Ntot"])
-    inflabels[sim["infection_status"] .== Expd] .= 2
-    inflabels[(sim["infection_status"] .== Symp)] .= 4
-    inflabels[sim["isolation_status"]] .= 3
-    inflabels[(sim["infection_status"] .== Symp) .* (sim["at_work"])] .= 5
-    inflabels[sim["infection_status"] .== Recd] .= 6
+    inflabels = inf_ref .* ones(Int8,sim["Ntot"])
+    inflabels[sim["infection_status"] .== Susc] .= susceptible_ref
+    inflabels[sim["infection_status"] .== Recd] .= recovered_ref
+    inflabels[.!sim["at_work"]] .= not_at_work_ref
+    inflabels[sim["isolation_status"]] .= isolating_ref
+
 
     draw(PNG(fname,19cm,19cm,dpi=150),gplot(lg, x_pos, y_pos,
                 nodefillc=inf_colours[inflabels],

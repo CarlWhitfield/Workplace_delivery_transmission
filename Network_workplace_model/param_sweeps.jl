@@ -15,6 +15,8 @@ function init_results_dataframe(Nrows::Int, AllParams::Dict)
 
     if AllParams["SimType"] == Outbreak_sim
         results.IndexCaseInfections = zeros(Int64,Nrows)
+        results.IndexCaseViralLoad = zeros(Float64,Nrows)
+        results.IndexCaseInfectivity = zeros(Float64,Nrows)
         results.OverallOutbreakLength = zeros(Int64,Nrows)
     end
     for p in keys(AllParams)
@@ -38,6 +40,8 @@ function add_to_results_dataframe!(results::DataFrame, Params::Dict, SimOutput::
     results[(irow_start):(irow_start+3),"Iteration"] .= Niteration
     if Params["SimType"] == Outbreak_sim
         results[(irow_start):(irow_start+3),"IndexCaseInfections"] .= SimOutput["IndexCaseInfections"]
+        results[(irow_start):(irow_start+3),"IndexCaseViralLoad"] .= SimOutput["IndexCaseViralLoad"]
+        results[(irow_start):(irow_start+3),"IndexCaseInfectivity"] .= SimOutput["IndexCaseInfectivity"]
         results[(irow_start):(irow_start+3),"OverallOutbreakLength"] .= length(SimOutput["time"])
     end
 
