@@ -157,7 +157,7 @@ function run_param_sweep_outbreak_parcel()
         end
     end
 
-    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; filename="param_sweep.csv")
+    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams, NPvec; filename="param_sweep.csv")
 end
 
 function run_presenteeism_param_sweep_outbreak_parcel()
@@ -194,7 +194,7 @@ function run_presenteeism_param_sweep_outbreak_parcel()
         end
     end
 
-    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; filename="presenteeism_param_sweep.csv")
+    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams, NPvec; filename="presenteeism_param_sweep.csv")
 end
 
 function run_testing_sweep_outbreak_parcel()
@@ -239,7 +239,7 @@ function run_testing_sweep_outbreak_parcel()
         end
     end
 
-    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; IsTesting=ones(Bool,length(ParamVec)),
+    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams, NPvec; IsTesting=ones(Bool,length(ParamVec)),
                   TestingParams=TestParamVec, filename="testing_loops.csv")
 
 end
