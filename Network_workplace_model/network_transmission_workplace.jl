@@ -1142,8 +1142,13 @@ function get_network_infections(infpairs::Array{Int64,2}, sim::Dict, Params::Dic
         nout1 = source.(Graphs.edges(sim["social_graph"])[eind])
         nout2 = target.(Graphs.edges(sim["social_graph"])[eind])
         nout = ((nout1 .!= nin) .* nout1) .+ ((nout2 .!= nin) .* nout2)
+        #need to check if they are in work (inf nodes are by definition)
+        nout = nout[sim["at_work"][nout] .== true]
+        #drivers have contact rate reduced by tD
         tedge = Params["tD"] .* ((sim["job"][nin] .== 1) .| (sim["job"][nout] .== 1)) .+
                                 ((sim["job"][nin] .!= 1) .* (sim["job"][nout] .!= 1))
+        #p_friend_contact < 1 reduced probability of contacting friends in work
+        tedge = Params["p_friend_contact"] .* tedge
         #get infectivity associated with each edge
         beta_vals = vcat(fill.(inf_scales,length.(out_edges.(inf,Ref(sim["social_graph"]))))...)
         eprob = 1 .- exp.(-infection_rate_F2F .* beta_vals .* t_F2F)
