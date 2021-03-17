@@ -89,7 +89,6 @@ function add_to_results_dataframe!(results::DataFrame, Params::Dict, SimOutput::
     results[(irow_start+3), "TPAsympIsolatorsFrac"] = sum(SimOutput["NewTestAsympIsolators"])/(NStot)
 end
 
-
 #Check this works
 function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
                 OccPerDay::Array{Float64,1}, PkgParams::Array{Dict{Any,Any},1};
@@ -184,7 +183,7 @@ function run_presenteeism_param_sweep_outbreak_parcel()
     PkgParams = Array{Dict{Any,Any},1}(undef,0)
     for pfc in PFC
         for ii in II
-            for pi in PISol
+            for pi in PIsol
                 push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
                                     "p_contact"=>pc, "Pisol"=>pi,
                                     "InfInit"=>ii, "tD"=>tD, "phi"=>Phi,
@@ -195,7 +194,7 @@ function run_presenteeism_param_sweep_outbreak_parcel()
         end
     end
 
-    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; filename="param_sweep.csv")
+    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; filename="presenteeism_param_sweep.csv")
 end
 
 function run_testing_sweep_outbreak_parcel()
@@ -210,41 +209,37 @@ function run_testing_sweep_outbreak_parcel()
     pc = ContactsPerDay/(NDh+NLh+NOh)
     #other params
     pasymp = 0.3
-    PIsol = [0.25,0.5,1.0]
-    NCP = [0.0,0.5,1.0]
+    #sweep these two in unison
+    PIsol = 0.5
+    NCP = [0.25,0.5,1.0]
     Tperiod = 2:2:14
-    Nrepeats = 1000
+    Nrepeats = 10000
 
 
-    Delay = [0,0,0,1,2]
-    TestType = ["NoTest","LFD","PCR","PCR","PCR"]
-    VL_ref = [4.5, 4.5, 1.5, 1.5, 1.5]
-    VL_disp = [0.5, 0.5, 3.0, 3.0, 3.0]
-    Sens_max = [0, 0.89, 0.907, 0.907, 0.907]
-    Test_pause = [14, 14,90,90,90]
+    Delay = [0,0,1,2]
+    TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
+    Test_pause = [21,90,90,90]
 
-    ParamVec = Array{Dict,1}(undef,0)
-    TestParamVec = Array{Dict,1}(undef,0)
-    PkgParams = Array{Dict,1}(undef,0)
-    for pi in PIsol
-        for ncp in NCP
-            for tp in Tperiod
-                for i in 1:length(TestType)
-                    push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
-                            "p_contact"=>pc, "Pasymp"=>pasymp, "Pisol"=>pi,
-                            "InfInit"=>1, "tD"=>1.0, "phi"=>1.0, "p_friend_contact"=>1.0,
-                            "SimType"=>Outbreak_sim))
-                    push!(TestParamVec, Dict("new_comply_prob"=>ncp, "tperiod"=>tp,
-                          "type"=>TestType[i], "VL_ref"=>VL_ref[i], "VL_disp"=>VL_disp[i],
-                          "sens_max"=>Sens_max[i], "specificity"=>0.995,
-                          "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
-                    push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
-                                 "Ltime"=>1/6, "PkgHlife"=>0.5))
-                end
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    for j in 1:3
+        for tp in Tperiod
+            for i in 1:length(TestType)
+                push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                        "p_contact"=>pc, "Pasymp"=>pasymp, "Pisol"=>PIsol,
+                        "InfInit"=>1, "tD"=>1.0, "phi"=>1.0, "p_friend_contact"=>1.0,
+                        "SimType"=>Outbreak_sim))
+                push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
+                      "protocol"=>TestType[i], "specificity"=>0.999,
+                      "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
+                push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                             "Ltime"=>1/6, "PkgHlife"=>0.5))
             end
         end
     end
 
     run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; IsTesting=ones(Bool,length(ParamVec)),
                   TestingParams=TestParamVec, filename="testing_loops.csv")
+
 end
