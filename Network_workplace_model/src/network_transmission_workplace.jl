@@ -338,7 +338,11 @@ function infect_random!(sim::Dict, InfInit::Int, i_day::Int,
                         pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0))
     #infect from non infectious
     nr = 1:sim["Ntot"]
-    nrsub = nr[(sim["infection_status"] .== Susc) .* (sim["job"] .== InfInit)]
+    if InfInit > 0
+        nrsub = nr[(sim["infection_status"] .== Susc) .* (sim["job"] .== InfInit)]
+        else  #infinit 0 means any random person
+        nrsub = nr[(sim["infection_status"] .== Susc)]
+    end
     inf = rand(nrsub,1)[1]
     partner = 0
     if length(pairs) > 0   #for pair isolation

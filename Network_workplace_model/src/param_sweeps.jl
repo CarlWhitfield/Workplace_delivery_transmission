@@ -123,7 +123,7 @@ function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
      return results
 end
 
-function run_param_sweep_outbreak_parcel()
+function run_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     NWeeks= 52
     NPh = 3000
     OccPattern = repeat([0.87,1.0,1.0,0.98,0.91,0.55,0],NWeeks)
@@ -139,7 +139,6 @@ function run_param_sweep_outbreak_parcel()
     II = [1,2,3]
     tD = 0.1:0.1:1.0
     Phi = [0.05,0.1,0.25,0.5,1.0]
-    Nrepeats = 10000
 
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
@@ -157,17 +156,18 @@ function run_param_sweep_outbreak_parcel()
         end
     end
 
-    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec, filename="param_sweep.csv")
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec, filename="param_sweep.csv")
+    return df
 end
 
-function run_param_sweep_outbreak_pairs()
+function run_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     NWeeks= 52
-    NPh = 250
+    NPh = 300
     OccPattern = repeat([0.80,0.94,0.95,0.94,1.0,0.96,0.53],NWeeks)
     NPvec = Int64.(round.(NPh*OccPattern))
-    NDh = Int64(round(NPh/15))
-    NLh = Int64(round(NPh/30))
-    NOh = Int64(round(NPh/50))
+    NDh = Int64(2*round(NPh/30))
+    NLh = Int64(2*round(NPh/40))
+    NOh = Int64(round(NPh/40))
     ContactsPerDay = 2
     pc = ContactsPerDay/(NDh+NLh+NOh)
     #other params
@@ -179,9 +179,7 @@ function run_param_sweep_outbreak_pairs()
     iswo = [true, false]
     fp = [true, false]
     pair_isol = [true, false]
-    Nrepeats = 10000
-
-
+    
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgParams = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
@@ -192,7 +190,7 @@ function run_param_sweep_outbreak_pairs()
                     for pih in pair_isol
                         push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
                                             "p_contact"=>pc, "Pisol"=>PIsol,
-                                            "InfInit"=>ii, "tD"=>td, "phi"=>phi,
+                                            "InfInit"=>ii, "tD"=>td, "phi"=>Phi,
                                             "p_friend_contact"=>PFC, "SimType"=>Outbreak_sim))
                         push!(PairParams, Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
                                                "fixed_driver_pairs"=>fix, "fixed_loader_pairs"=>fix,
@@ -205,11 +203,12 @@ function run_param_sweep_outbreak_pairs()
         end
     end
 
-    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec,
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec,
                   filename="param_sweep_pairs.csv", PairParams = PairParams)
+    return df
 end
 
-function run_presenteeism_param_sweep_outbreak_parcel()
+function run_presenteeism_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     NWeeks= 52
     NPh = 3000
     OccPattern = repeat([0.87,1.0,1.0,0.98,0.91,0.55,0],NWeeks)
@@ -225,8 +224,6 @@ function run_presenteeism_param_sweep_outbreak_parcel()
     II = [1,2,3]
     tD = 0.25
     Phi = 0.05
-    Nrepeats = 10000
-
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgParams = Array{Dict{Any,Any},1}(undef,0)
@@ -243,17 +240,19 @@ function run_presenteeism_param_sweep_outbreak_parcel()
         end
     end
 
-    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec, filename="presenteeism_param_sweep.csv")
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; 
+                  NPPerDay = NPvec, filename="presenteeism_param_sweep.csv")
+    return df
 end
 
-function run_presenteeism_param_sweep_outbreak_pairs()
+function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     NWeeks= 52
-    NPh = 250
+    NPh = 300
     OccPattern = repeat([0.80,0.94,0.95,0.94,1.0,0.96,0.53],NWeeks)
     NPvec = Int64.(round.(NPh*OccPattern))
-    NDh = Int64(round(NPh/15))
-    NLh = Int64(round(NPh/30))
-    NOh = Int64(round(NPh/50))
+    NDh = Int64(2*round(NPh/30))
+    NLh = Int64(2*round(NPh/40))
+    NOh = Int64(round(NPh/40))
     ContactsPerDay = 2
     pc = ContactsPerDay/(NDh+NLh+NOh)
     #other params
@@ -262,7 +261,6 @@ function run_presenteeism_param_sweep_outbreak_pairs()
     II = [1,2,3]
     tD = 0.5
     Phi = 0.05
-    Nrepeats = 10000
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgParams = Array{Dict{Any,Any},1}(undef,0)
@@ -283,11 +281,12 @@ function run_presenteeism_param_sweep_outbreak_pairs()
         end
     end
 
-    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec,
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec,
                   filename="presenteeism_param_sweep_pairs.csv", PairParams = PairParams)
+    return df
 end
 
-function run_testing_sweep_outbreak_parcel()
+function run_testing_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     NWeeks= 52
     NPh = 3000
     OccPattern = repeat([0.87,1.0,1.0,0.98,0.91,0.55,0],NWeeks)
@@ -303,8 +302,6 @@ function run_testing_sweep_outbreak_parcel()
     PIsol = 0.5
     NCP = [0.25,0.5,1.0]
     Tperiod = 2:2:14
-    Nrepeats = 10000
-
 
     Delay = [0,0,1,2]
     TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
@@ -318,7 +315,7 @@ function run_testing_sweep_outbreak_parcel()
             for i in 1:length(TestType)
                 push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
                         "p_contact"=>pc, "Pasymp"=>pasymp, "Pisol"=>PIsol,
-                        "InfInit"=>1, "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
+                        "InfInit"=>0, "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
                         "SimType"=>Outbreak_sim))
                 push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
                       "protocol"=>TestType[i], "specificity"=>0.999,
@@ -329,18 +326,20 @@ function run_testing_sweep_outbreak_parcel()
         end
     end
 
-    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;  NPPerDay = NPvec, IsTesting=ones(Bool,length(ParamVec)),
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;  
+                  NPPerDay = NPvec, IsTesting=ones(Bool,length(ParamVec)),
                   TestingParams=TestParamVec, filename="testing_loops.csv")
+    return df
 end
 
-function run_testing_sweep_outbreak_pairs()
+function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     NWeeks= 52
-    NPh = 250
+    NPh = 300
     OccPattern = repeat([0.80,0.94,0.95,0.94,1.0,0.96,0.53],NWeeks)
     NPvec = Int64.(round.(NPh*OccPattern))
-    NDh = Int64(round(NPh/15))
-    NLh = Int64(round(NPh/30))
-    NOh = Int64(round(NPh/50))
+    NDh = Int64(2*round(NPh/30))
+    NLh = Int64(2*round(NPh/40))
+    NOh = Int64(round(NPh/40))
     ContactsPerDay = 2
     pc = ContactsPerDay/(NDh+NLh+NOh)
     #sweep these two in unison
@@ -349,8 +348,6 @@ function run_testing_sweep_outbreak_pairs()
     PIsol = 0.5
     NCP = [0.25,0.5,1.0]
     Tperiod = 2:2:14
-    Nrepeats = 10000
-
 
     Delay = [0,0,1,2]
     TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
@@ -363,9 +360,10 @@ function run_testing_sweep_outbreak_pairs()
     for j in 1:3
         for tp in Tperiod
             for i in 1:length(TestType)
+                
                 push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
-                        "p_contact"=>pc, "Pasymp"=>pasymp, "Pisol"=>PIsol,
-                        "InfInit"=>1, "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
+                        "p_contact"=>pc, "Pisol"=>PIsol, "InfInit"=>0,
+                        "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
                         "SimType"=>Outbreak_sim))
                 push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
                       "protocol"=>TestType[i], "specificity"=>0.999,
@@ -379,7 +377,8 @@ function run_testing_sweep_outbreak_pairs()
         end
     end
 
-    run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;  NPPerDay = NPvec,
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;  NPPerDay = NPvec,
                   IsTesting=ones(Bool,length(ParamVec)), TestingParams=TestParamVec,
                   PairParams = PairParams, filename="testing_loops_pairs.csv")
+    return df
 end
