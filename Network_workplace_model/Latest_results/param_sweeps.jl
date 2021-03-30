@@ -115,7 +115,7 @@ function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
                    is_network=IsNetwork[i], is_pairs=IsPairs[i], PairParams=PairParams[i],
                    testing=IsTesting[i], TestParams=TestingParams[i])
              AllParams = merge(ParamsVec[i],PkgParams[i],PairParams[i],TestingParams[i])
-             add_to_results_dataframe!(results, Params, out, index_start, n)
+             add_to_results_dataframe!(results, AllParams, out, index_start, n)
          end
      end
 
