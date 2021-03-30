@@ -179,7 +179,7 @@ function run_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     iswo = [true, false]
     fp = [true, false]
     pair_isol = [true, false]
-    
+
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgParams = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
@@ -241,7 +241,7 @@ function run_presenteeism_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
         end
     end
 
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; 
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;
                   NPPerDay = NPvec, filename="presenteeism_param_sweep.csv")
     return df
 end
@@ -316,7 +316,7 @@ function run_testing_sweep_outbreak_parcel(Nrepeats::Int = 10000)
         for tp in Tperiod
             for i in 1:length(TestType)
                 push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
-                        "p_contact"=>pc, "Pasymp"=>pasymp, "Pisol"=>PIsol,
+                        "p_contact"=>pc, "Pisol"=>PIsol,
                         "InfInit"=>0, "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
                         "SimType"=>Outbreak_sim))
                 push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
@@ -328,7 +328,7 @@ function run_testing_sweep_outbreak_parcel(Nrepeats::Int = 10000)
         end
     end
 
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;  
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;
                   NPPerDay = NPvec, IsTesting=ones(Bool,length(ParamVec)),
                   TestingParams=TestParamVec, filename="testing_loops.csv")
     return df
@@ -362,7 +362,7 @@ function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     for j in 1:3
         for tp in Tperiod
             for i in 1:length(TestType)
-                
+
                 push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
                         "p_contact"=>pc, "Pisol"=>PIsol, "InfInit"=>0,
                         "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
