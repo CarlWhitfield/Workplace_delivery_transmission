@@ -178,6 +178,7 @@ function run_param_sweep_outbreak_pairs()
     Phi = 0.05
     iswo = [true, false]
     fp = [true, false]
+    pair_isol = [true, false]
     Nrepeats = 10000
 
 
@@ -188,15 +189,17 @@ function run_param_sweep_outbreak_pairs()
         for td in tD
             for wo in iswo
                 for fix in fp
-                    push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
-                                        "p_contact"=>pc, "Pisol"=>PIsol,
-                                        "InfInit"=>ii, "tD"=>td, "phi"=>phi,
-                                        "p_friend_contact"=>PFC, "SimType"=>Outbreak_sim))
-                    push!(PairParams, Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
-                                           "fixed_driver_pairs"=>fix, "fixed_loader_pairs"=>fix,
-                                           "is_window_open"=>wo))
-                    push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
-                                        "Ltime"=>1/6, "PkgHlife"=>0.5))
+                    for pih in pair_isol
+                        push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                                            "p_contact"=>pc, "Pisol"=>PIsol,
+                                            "InfInit"=>ii, "tD"=>td, "phi"=>phi,
+                                            "p_friend_contact"=>PFC, "SimType"=>Outbreak_sim))
+                        push!(PairParams, Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
+                                               "fixed_driver_pairs"=>fix, "fixed_loader_pairs"=>fix,
+                                               "is_window_open"=>wo, "pair_isolation"=>pih))
+                        push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                                            "Ltime"=>1/6, "PkgHlife"=>0.5))
+                    end
                 end
             end
         end
@@ -275,7 +278,7 @@ function run_presenteeism_param_sweep_outbreak_pairs()
                                  "Ltime"=>1/6, "PkgHlife"=>0.5))
                 push!(PairParams, Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
                                        "fixed_driver_pairs"=>true, "fixed_loader_pairs"=>true,
-                                        "is_window_open"=>false, "pair_isol"=>true))
+                                        "is_window_open"=>false, "pair_isolation"=>true))
             end
         end
     end
@@ -371,7 +374,7 @@ function run_testing_sweep_outbreak_pairs()
                              "Ltime"=>1/6, "PkgHlife"=>0.5))
                 push!(PairParams, Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
                                         "fixed_driver_pairs"=>true, "fixed_loader_pairs"=>true,
-                                         "is_window_open"=>false, "pair_isol"=>true))
+                                         "is_window_open"=>false, "pair_isolation"=>true))
             end
         end
     end
