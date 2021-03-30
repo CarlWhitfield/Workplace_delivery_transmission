@@ -204,7 +204,7 @@ function run_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     end
 
     df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec,
-                  filename="param_sweep_pairs.csv", IsPairs = ones(len(PairParams)),
+                  filename="param_sweep_pairs.csv", IsPairs = ones(Bool,length(PairParams)),
                   PairParams = PairParams)
     return df
 end
@@ -283,8 +283,8 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     end
 
     df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec,
-                  IsPairs = ones(len(PairParams)), filename="presenteeism_param_sweep_pairs.csv",
-                  PairParams = PairParams)
+                  IsPairs = ones(Bool,length(PairParams)), PairParams = PairParams,
+                  filename="presenteeism_param_sweep_pairs.csv")
     return df
 end
 
@@ -381,7 +381,7 @@ function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
 
     df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;  NPPerDay = NPvec,
                   IsTesting=ones(Bool,length(ParamVec)), TestingParams=TestParamVec,
-                  IsPairs = ones(len(PairParams)), PairParams = PairParams, 
+                  IsPairs = ones(Bool,length(PairParams)), PairParams = PairParams,
                   filename="testing_loops_pairs.csv")
     return df
 end
