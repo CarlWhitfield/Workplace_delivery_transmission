@@ -5,6 +5,6 @@
 *.png
 *.pyc
 *.mp4
-Company Data Analysis/volume_data.ipynb
 Company Data Analysis/
 Network_workplace_model/.ipynb_checkpoints/
+Network_workplace_model/Testing_params/
