@@ -611,8 +611,11 @@ function generate_pair_infections(sim::Dict, i_day::Int, t_pair::Array{Float64,1
     all_inf, all_inf_scales = get_infectivities(sim, i_day)
     ipairs = Array{Int64,2}(undef,3,0)
     inf_job_cat = (sim["job"][all_inf] .== job)
-    if length(inf_job_cat) > 0
+    print("Pairs: ", pairs,'\n')
+    
+    if sum(inf_job_cat) > 0
         inf = all_inf[inf_job_cat]
+        print("Infectious: ", inf,'\n')
         inf_scales = all_inf_scales[inf_job_cat]
 
         p1 = zeros(length(inf))
