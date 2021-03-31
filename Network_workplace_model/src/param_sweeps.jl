@@ -260,7 +260,7 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     PIsol = 0.05:0.05:1.0
     PFC = [0.25,0.5,1.0]
     II = [1,2,3]
-    tD = 0.5
+    tD = 0.25
     Phi = 0.05
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
