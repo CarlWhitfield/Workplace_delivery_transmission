@@ -319,17 +319,18 @@ end
 function infect_node!(sim::Dict, i::Int, time::Int, partner::Int64 = 0)
     sim["infection_status"][i] = Expd
     sim["inf_time"][i] = time
-    #print(sim["inf_time"][i],' ',sim["symp_day"][i],'\n')
+    #Assume partner isolation is guaranteed if infected node isolates (i.e. enforced)
     if sim["will_isolate"][i]
         if sim["isolation_time"][i] > time + sim["symp_day"][i] ||
            sim["isolation_time"][i] == 0 #might already be isolating
                sim["isolation_time"][i] = time + sim["symp_day"][i]
         end
-    end  
-    if partner > 0   #pair isolation
-        if sim["isolation_time"][partner] > time + sim["symp_day"][i] ||
-           sim["isolation_time"][partner] == 0   #if not isolating already or isolating later than this
-                sim["isolation_time"][partner] = time + sim["symp_day"][i]
+#         print("Symp isol: ", i, ' ', time, ' ', sim["isolation_time"][i], '\n')
+        if partner > 0   #pair isolation
+            if sim["isolation_time"][partner] > time + sim["symp_day"][i] ||
+               sim["isolation_time"][partner] == 0   #if not isolating already or isolating later than this
+                    sim["isolation_time"][partner] = time + sim["symp_day"][i]
+            end
         end
     end
 end
@@ -439,8 +440,14 @@ end
 function update_isolation!(sim::Dict, i_day::Int)
     nr = 1:sim["Ntot"]
     #isolators
-    isolators = nr[sim["isolation_time"] .> 0]
-    infisol = isolators[(i_day .== sim["isolation_time"][isolators])]
+    cond0 = (sim["isolation_time"] .> 0)
+    isolators = nr[cond0]
+    #isolating today (over-cautious definition)
+    cond1 = (sim["isolation_time"][isolators] .<= i_day) #isolation time today or before
+    cond2 = (sim["isolation_status"][isolators] .== false)   #not currently isolating
+    infisol = isolators[cond1 .* cond2]
+    ########
+    
     sim["isolation_status"][infisol] .= true
 
     is_true_test = sim["isolating_due_to_true_test"][infisol]
@@ -464,6 +471,7 @@ function update_isolation!(sim::Dict, i_day::Int)
     isol_leavers = isols[(i_day  .- sim["isolation_time"][isols]) .== isol_time ]
     sim["isolation_status"][isol_leavers] .= false
     #reset flags
+    sim["isolation_time"][isol_leavers] .= 0   #can isolate again, even though recovered
     sim["isolation_status_true_test"][isol_leavers] .= false
     sim["isolation_status_false_test"][isol_leavers] .= false
     sim["isolation_status_partner_true_test"][isol_leavers] .= false
@@ -483,11 +491,14 @@ function select_pairs(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64, Nc
         p1 = 1:2:sim["N"][job]
         p2 = 2:2:sim["N"][job]
         is_pair_available = is_available[p1] .* is_available[p2]
-        available_unpaired = vcat(p1[is_available[p1] .* (.!is_available[p2])],
-                            p2[is_available[p2] .* (.!is_available[p1])])
+        available_unpaired = jobgroup[vcat(p1[is_available[p1] .* (.!is_available[p2])],
+                            p2[is_available[p2] .* (.!is_available[p1])])]
         available_pairs = (1:TotPairs)[is_pair_available]
         pairs_nos = vcat(transpose(jobgroup[p1]), transpose(jobgroup[p2]))
         apl = length(available_pairs)
+#         if length(available_unpaired) > 0
+#             print("Available unpaired: ", available_unpaired, '\n')
+#         end
         if apl < NP
             pairs[1,1:apl] = pairs_nos[1,available_pairs]
             pairs[2,1:apl] = pairs_nos[2,available_pairs]
@@ -495,14 +506,12 @@ function select_pairs(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64, Nc
                 nos = sample(available_unpaired, 2*(NP - apl), replace = false)
                 pairs[1,(apl+1):NP] = nos[1:(NP-apl)]
                 pairs[2,(apl+1):NP] = nos[(NP-apl+1):(2*(NP - apl))]
-            else
+            elseif length(available_unpaired) > 1
                 #draw as many random pairs as are left, discard rest
                 NPleft = Int64(floor(length(available_unpaired)/2))
-                if NPleft > 0
-                    nos = sample(available_unpaired, 2*NPleft, replace = false)
-                    pairs[1,(apl+1):(apl+NPleft)] = nos[1:NPleft]
-                    pairs[2,(apl+1):(apl+NPleft)] = nos[(NPleft+1):(2*NPleft)]
-                end
+                nos = sample(available_unpaired, 2*NPleft, replace = false)
+                pairs[1,(apl+1):(apl+NPleft)] = nos[1:NPleft]
+                pairs[2,(apl+1):(apl+NPleft)] = nos[(NPleft+1):(2*NPleft)]
                 trimpairs = pairs[:, 1:(apl + NPleft)]
                 pairs = pairs
             end
@@ -521,7 +530,7 @@ function select_pairs(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64, Nc
     else
         pair_cons = Array{Int64,1}(undef,0)
     end
-
+    
     return pairs, pair_cons
 end
 
@@ -532,7 +541,7 @@ function update_in_work!(sim::Dict, occ::Float64, Ncons::Int64,
                 loader_cons::Array{Int64,1} = Array{Int64,1}(undef,0))
     #wih driver pairs
     nr = 1:sim["Ntot"]
-    sim["at_work"] = zeros(Bool,sim["Ntot"])
+    sim["at_work"] .= false
     NAs = zeros(Int64,sim["Ntot"])
     to_select = []
     if length(driver_pairs) > 0
@@ -552,6 +561,7 @@ function update_in_work!(sim::Dict, occ::Float64, Ncons::Int64,
     push!(to_select,3)
     for j in to_select
         job = nr[sim["job"] .== j]
+        
         available = job[sim["isolation_status"][job] .== false]
         if length(available)/length(job) > occ
             w = sample(job, round(Int,occ*length(job)), replace=false)
@@ -563,7 +573,6 @@ function update_in_work!(sim::Dict, occ::Float64, Ncons::Int64,
         end
         sim["at_work"][w] .= true
     end
-
     return NAs
 end
 
@@ -611,13 +620,15 @@ function generate_pair_infections(sim::Dict, i_day::Int, t_pair::Array{Float64,1
     all_inf, all_inf_scales = get_infectivities(sim, i_day)
     ipairs = Array{Int64,2}(undef,3,0)
     inf_job_cat = (sim["job"][all_inf] .== job)
-    
+    nr = collect(1:sim["Ntot"])
+    nrh = nr[sim["job"] .== job]
     if sum(inf_job_cat) > 0
         inf = all_inf[inf_job_cat]
         inf_scales = all_inf_scales[inf_job_cat]
 
         p1 = zeros(length(inf))
         p2 = zeros(length(inf))
+        
         for (i_inf, infp) in enumerate(inf)
             pair_col = Bool.((pairs[1,:] .== infp) + (pairs[2,:] .== infp))
             p1[i_inf] = infection_rate_F2F_outside * t_pair[pair_col][1]
@@ -1273,7 +1284,7 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
     sim["isolation_time"][to_update] .= isol_day[bool_update_isol_time]
     
     
-    #locate partners
+    #locate partners for those who will isolate
     partners = zeros(Int64, length(to_update))
     if length(pairs) > 0
         partners .= find_partner.(Ref(pairs),to_update)
@@ -1285,6 +1296,7 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
     
     
     for (i,ip) in enumerate(to_update)
+        #all partners of isolators do isolate
         if partners[i] > 0
             if sim["isolation_time"][partners[i]] == 0 || 
                sim["isolation_time"][partners[i]] > sim["isolation_time"][ip]
@@ -1302,7 +1314,15 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
             sim["isolating_due_to_true_test"][ip] = true
         end
     end
-
+    
+#     if length(to_update) > 0
+#         print(i_day, '\n')
+#         print("Isolators: ", to_update, '\n')
+#         print("Partners: ", partners, '\n')
+#         print("Isol times: ", sim["isolation_time"][to_update], '\n')
+#         print("Isol times p: ", sim["isolation_time"][partners[partners .> 0]], '\n')
+#     end
+    
     sim["testing_paused"][will_isolate] .= true
     sim["resume_testing"][will_isolate] .= i_day + testing_params["delay"] +
                                            testing_params["test_pause"]
