@@ -79,14 +79,19 @@ function add_to_results_dataframe!(results::DataFrame, Params::Dict, SimOutput::
     results[(irow_start+3),"RoomInfectionFrac"] = sum(SimOutput["RoomInfs"]) / NStot
     results[(irow_start+3),"CustIntroFrac"] = sum(SimOutput["CustomerIntroductions"]) / NStot
     results[(irow_start+3),"ExtIntroFrac"] = sum(SimOutput["ExternalIntroductions"]) / NStot
-    results[(irow_start+3),"TotInfPackagesDelivered"] = sum(SimOutput["PackagesInfectiousOnDelivery"])
-    results[(irow_start+3), "CustomersInfectedByPkg"] = sum(SimOutput["CustomersInfectedByPkgs"])
-    results[(irow_start+3), "CustomersInfectedByDrivers"] = sum(SimOutput["CustomersInfectedByDrivers"])
     results[(irow_start+3), "IsolatorsFrac"] = sum(SimOutput["NewIsolators"])/(NStot)
     results[(irow_start+3), "SympIsolatorsFrac"] = sum(SimOutput["NewSympIsolators"])/(NStot)
     results[(irow_start+3), "FPIsolatorsFrac"] = sum(SimOutput["NewFalseIsolators"])/(NStot)
     results[(irow_start+3), "TPSympIsolatorsFrac"] = sum(SimOutput["NewTestSympIsolators"])/(NStot)
     results[(irow_start+3), "TPAsympIsolatorsFrac"] = sum(SimOutput["NewTestAsympIsolators"])/(NStot)
+    
+    #multi-liners
+    results[(irow_start):(irow_start+3),"TotInfPackagesDelivered"] .= 
+                sum(SimOutput["PackagesInfectiousOnDelivery"])
+    results[(irow_start):(irow_start+3), "CustomersInfectedByPkg"] .= 
+                sum(SimOutput["CustomersInfectedByPkgs"])
+    results[(irow_start):(irow_start+3), "CustomersInfectedByDrivers"] .= 
+                sum(SimOutput["CustomersInfectedByDrivers"])
 end
 
 #Check this works
@@ -98,7 +103,7 @@ function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
                 PairParams::Array{Dict{Any,Any},1} = fill(Dict(),length(ParamsVec)),
                 IsTesting::Array{Bool,1} = zeros(Bool,length(ParamsVec)),
                 TestingParams::Array{Dict{Any,Any},1} = fill(Dict(),length(ParamsVec)),
-                filename="output.csv")
+                filename="output.csv", output::Bool = true)
 
      NParamSets = length(ParamsVec)
      Nrows = 4*NParamSets*Nrepeats
@@ -330,7 +335,32 @@ function run_testing_sweep_outbreak_parcel(Nrepeats::Int = 10000)
 
     df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;
                   NPPerDay = NPvec, IsTesting=ones(Bool,length(ParamVec)),
-                  TestingParams=TestParamVec, filename="testing_loops.csv")
+                  TestingParams=TestParamVec, output = false)
+    
+    #run baseline case
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    PairParams = Array{Dict{Any,Any},1}(undef,0)
+    push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                        "p_contact"=>pc, "Pisol"=>PIsol, "InfInit"=>0,
+                        "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
+                        "SimType"=>Outbreak_sim))
+    push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                        "Ltime"=>1/6, "PkgHlife"=>0.5))
+    
+    df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern, PkgParams;  NPPerDay = NPvec,
+                  output = false)
+    
+    df2["new_comply_prob"] = zeros(nrow(df2))
+    df2["tperiod"] = zeros(nrow(df2))
+    df2["protocol"] = fill("No testing", nrow(df2))
+    df2["specificity"] = 0.999 * ones(nrow(df2))
+    df2["delay"] = zeros(nrow(df2))
+    df2["test_pause"] = zeros(nrow(df2))
+    dfout = vcat(df,df2)
+    
+    CSV.write("testing_sweep.csv", dfout)
+    
     return df
 end
 
@@ -382,6 +412,33 @@ function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;  NPPerDay = NPvec,
                   IsTesting=ones(Bool,length(ParamVec)), TestingParams=TestParamVec,
                   IsPairs = ones(Bool,length(PairParams)), PairParams = PairParams,
-                  filename="testing_loops_pairs.csv")
+                  output = false)
+    
+    #run baseline case
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    PairParams = Array{Dict{Any,Any},1}(undef,0)
+    push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                        "p_contact"=>pc, "Pisol"=>PIsol, "InfInit"=>0,
+                        "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
+                        "SimType"=>Outbreak_sim))
+    push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                        "Ltime"=>1/6, "PkgHlife"=>0.5))
+    push!(PairParams, Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
+                            "fixed_driver_pairs"=>true, "fixed_loader_pairs"=>true,
+                            "is_window_open"=>false, "pair_isolation"=>true))
+    
+    df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern, PkgParams;  NPPerDay = NPvec,
+                  IsPairs = ones(Bool,length(PairParams)), PairParams = PairParams,
+                  output = false)
+    df2["new_comply_prob"] = zeros(nrow(df2))
+    df2["tperiod"] = zeros(nrow(df2))
+    df2["protocol"] = fill("No testing", nrow(df2))
+    df2["specificity"] = 0.999 * ones(nrow(df2))
+    df2["delay"] = zeros(nrow(df2))
+    df2["test_pause"] = zeros(nrow(df2))
+    df = vcat(df,df2)
+    
+    CSV.write("testing_sweep_pairs.csv", df)
     return df
 end
