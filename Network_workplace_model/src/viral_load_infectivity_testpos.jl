@@ -29,7 +29,7 @@ const LFD_PDcurve_b1 = 1.22
 #VL ~ infectivity relation (Marks)
 const inf_dep = 1.3
 const VL_ref = mean(Normal(peakVL_mean,peakVL_sd))
-const PIsigma = 1.0
+const PIsigma = 0.5
 const PImu = -0.5*PIsigma^2
 #Viral load where people stop being infectious
 const inf_VL_cutoff = 0.0 #3.0 -- should only have minor effect
@@ -83,6 +83,7 @@ function build_viral_load_distributions!(sim::Dict)
     sim["VL_mag"] = PVLs
     sim["symp_time"] = OTs .+ PTs
     sim["VL_profiles"] = v
+    sim["decay_time"] = DTs
 end
 
 function generate_peak_inf(peak_VL::Float64, asymp::Bool)
