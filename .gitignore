@@ -9,3 +9,5 @@ Company Data Analysis/
 Network_workplace_model/.ipynb_checkpoints/
 Network_workplace_model/*/.ipynb_checkpoints/
 Network_workplace_model/Testing_params/
+*.pdf
+*.svg
