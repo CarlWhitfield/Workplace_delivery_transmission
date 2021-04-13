@@ -596,6 +596,8 @@ function update_in_work!(sim::Dict, occ::Float64, Ncons::Int64)
         sim["at_work"][w] .= true
     end
 
+    
+    
     return NAs
 end
 
@@ -686,7 +688,7 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
     AllLoaders::Array{Int64,1}, InfLoaders::Array{Int64,1}, InfLoaderScales::Array{Float64,1},
     PkgParams::Dict, NAs::Array{Int64,1})
 
-    DAorder = cumsum(NAs[1:length(AllDrivers)])
+    DAorder = cumsum(NAs[AllDrivers])
     InfectorAtPickup = Array{Int64,1}(undef,0)
     StimesAtPickup = Array{Float64,1}(undef,0)
 
@@ -698,6 +700,7 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
     # d_assignment = zeros(Int64,NP)
     NPavailable = collect(1:NP)
     #generate packages infected by loaders
+    #PkgsInfected = []
     if length(InfLoaders) > 0
         #now InfLoaders either contains infectious loaders or loader pairs
         #the latter are treated as a unit with infectivity equal to their combined infectivitiy
@@ -722,15 +725,19 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
                         StimesAtPickup = vcat(StimesAtPickup, sth[Iapcond])
                         PDAgen = sample(NPavailable, sum(Iapcond), replace=false)  #generate package number
                         filter!(eh -> !(eh in PDAgen), NPavailable)  #remove PDAgen from NP available
+                        #push!.(Ref(PkgsInfected), PDAgen)
                         Nd = 1:length(AllDrivers)
                         for p in PDAgen  #for each package number generated, assign to driver based on cumsum
-                            Dbool = (p .> (vcat([0],DAorder[1:(end-1)]) .* (p .< DAorder)))
+                            bool1 = p .> vcat([0],DAorder[1:(end-1)])
+                            bool2 = p .<= DAorder
+                            Dbool = bool1 .* bool2
                             push!(IDDriverPickup, AllDrivers[Dbool][1])
                         end
                     end
                 end
             end
         end
+        #print("Packages infected: ", PkgsInfected,"\n")
     end
 
     #package infections by drivers here
