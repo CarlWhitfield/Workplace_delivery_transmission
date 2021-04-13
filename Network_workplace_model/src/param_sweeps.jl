@@ -604,3 +604,95 @@ function run_testing_sweep_fixedprev_scenario_pairs(Prev_val::Float64, Nrepeats:
     CSV.write(fname, df)
     return df
 end
+
+function run_param_sweep_outbreak_fomite_parcel(Nrepeats::Int = 10000)
+    NWeeks= 52
+    NPh = 3000
+    OccPattern = repeat([0.87,1.0,1.0,0.98,0.91,0.55,0],NWeeks)
+    NPvec = Int64.(round.(NPh*OccPattern))
+    NDh = Int64(round(NPh/80))
+    NLh = Int64(round(NPh/150))
+    NOh = Int64(round(NPh/300))
+    ContactsPerDay = 2
+    pc = ContactsPerDay/(NDh+NLh+NOh)
+    #other params
+    PIsol = 0.5
+    PFC = 1.0
+    II = [1,2,3]
+    tD = 0.25
+    Phi = [0.05, 1.0]
+    PFT = [0.001,0.01,0.1]
+    PFC = [0.001,0.01,0.1]
+
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    for phi in Phi
+        for ii in II
+            for pft in PFT
+                for pfc in PFC
+                    push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                                    "p_contact"=>pc, "Pisol"=>PIsol,
+                                    "InfInit"=>ii, "tD"=>tD, "phi"=>phi,
+                                    "p_friend_contact"=>PFC, "SimType"=>Outbreak_sim))
+                    push!(PkgParams, Dict("p_fomite_contr"=>pfc, "p_fomite_trans"=>pft, "Dtime"=>4,
+                                            "Ltime"=>4, "PkgHlife"=>3))
+                end
+            end
+        end
+    end
+
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec, filename="param_sweep_fomite.csv")
+    return df
+end
+
+function run_param_sweep_outbreak_fomite_pairs(Nrepeats::Int = 10000)
+    NWeeks= 52
+    NPh = 300
+    OccPattern = repeat([0.80,0.94,0.95,0.94,1.0,0.96,0.53],NWeeks)
+    NPvec = Int64.(round.(NPh*OccPattern))
+    NDh = Int64(2*round(NPh/30))
+    NLh = Int64(2*round(NPh/40))
+    NOh = Int64(round(NPh/40))
+    ContactsPerDay = 2
+    pc = ContactsPerDay/(NDh+NLh+NOh)
+    #other params
+    PIsol = 0.5
+    PFC = 1.0
+    II = [1,2,3]
+    Phi = 0.05
+    iswo = [true, false]
+    fp = [true, false]
+    pair_isol = [true, false]
+    PFT = [0.001,0.01,0.1]
+    PFC = [0.001,0.01,0.1]
+    tD = 0.25
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    PairParams = Array{Dict{Any,Any},1}(undef,0)
+    for ii in II
+        for pft in PFT
+            for pfc in PFC
+                for wo in iswo
+                    for fix in fp
+                        for pih in pair_isol
+                            push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                                                "p_contact"=>pc, "Pisol"=>PIsol,
+                                                "InfInit"=>ii, "tD"=>tD, "phi"=>Phi,
+                                                "p_friend_contact"=>PFC, "SimType"=>Outbreak_sim))
+                            push!(PairParams, Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
+                                                   "fixed_driver_pairs"=>fix, "fixed_loader_pairs"=>fix,
+                                                   "is_window_open"=>wo, "pair_isolation"=>pih))
+                            push!(PkgParams, Dict("p_fomite_contr"=>pfc, "p_fomite_trans"=>pft, "Dtime"=>4,
+                                                "Ltime"=>4, "PkgHlife"=>3))
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec,
+                  filename="param_sweep_pairs_fomite.csv", IsPairs = ones(Bool,length(PairParams)),
+                  PairParams = PairParams)
+    return df
+end

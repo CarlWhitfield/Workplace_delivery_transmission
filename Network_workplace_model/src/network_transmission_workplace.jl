@@ -335,7 +335,7 @@ function infect_node!(sim::Dict, i::Int, time::Int, partner::Int64 = 0)
     end
 end
 
-function infect_random!(sim::Dict, InfInit::Int, i_day::Int, 
+function infect_random!(sim::Dict, InfInit::Int, i_day::Int,
                         pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0))
     #infect from non infectious
     nr = 1:sim["Ntot"]
@@ -350,7 +350,7 @@ function infect_random!(sim::Dict, InfInit::Int, i_day::Int,
         partner = find_partner(pairs, inf)
     end
     infect_node!(sim, inf, i_day, partner)
-    
+
     return inf
 end
 
@@ -362,7 +362,7 @@ function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int)
     isol_false_test = (sim["isolation_status_false_test"] .== true)
     isol_partner_true_test = (sim["isolation_status_partner_true_test"] .== true)
     isol_partner_false_test = (sim["isolation_status_partner_false_test"] .== true)
-    isol_no_test = (.!(isol_true_test) .* .!(isol_false_test) .* 
+    isol_no_test = (.!(isol_true_test) .* .!(isol_false_test) .*
                     .!(isol_partner_true_test) .* .!(isol_partner_false_test))
     asymp_bool = (sim["asymptomatic"] .== true)
     inf_bool = (sim["infection_status"] .== Symp)
@@ -385,7 +385,7 @@ function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int)
         summary["IsolatedDueToFalsePos"][j,i_day] = sum(jt .* isol_false_test)
         summary["IsolatedDueToPartnerTruePos"][j,i_day] = sum(jt .* isol_partner_true_test)
         summary["IsolatedDueToPartnerFalsePos"][j,i_day] = sum(jt .* isol_partner_false_test)
-        
+
         summary["NewSympIsolators"][j,i_day] = sum(jt .* isol_no_test .* new_isolator_bool)
         summary["NewTestAsympIsolators"][j,i_day] = sum(jt .* isol_true_test .* new_isolator_bool .* asymp_bool)
         summary["NewTestSympIsolators"][j,i_day] = sum(jt .* isol_true_test .* new_isolator_bool .* .!(asymp_bool))
@@ -447,7 +447,7 @@ function update_isolation!(sim::Dict, i_day::Int)
     cond2 = (sim["isolation_status"][isolators] .== false)   #not currently isolating
     infisol = isolators[cond1 .* cond2]
     ########
-    
+
     sim["isolation_status"][infisol] .= true
 
     is_true_test = sim["isolating_due_to_true_test"][infisol]
@@ -457,11 +457,11 @@ function update_isolation!(sim::Dict, i_day::Int)
     is_true_partner_test = sim["isolating_due_to_partner_true_test"][infisol]
     sim["isolation_status_partner_true_test"][infisol[is_true_partner_test]] .= true
     sim["isolating_due_to_partner_true_test"][infisol[is_true_partner_test]] .= false #reset
-    
+
     is_false_test = sim["isolating_due_to_false_test"][infisol]
     sim["isolation_status_false_test"][infisol[is_false_test]] .= true
     sim["isolating_due_to_false_test"][infisol[is_false_test]] .= false #reset
-    
+
     is_false_partner_test = sim["isolating_due_to_partner_false_test"][infisol]
     sim["isolation_status_partner_false_test"][infisol[is_false_partner_test]] .= true
     sim["isolating_due_to_partner_false_test"][infisol[is_false_partner_test]] .= false #reset
@@ -530,7 +530,7 @@ function select_pairs(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64, Nc
     else
         pair_cons = Array{Int64,1}(undef,0)
     end
-    
+
     return pairs, pair_cons
 end
 
@@ -561,7 +561,7 @@ function update_in_work!(sim::Dict, occ::Float64, Ncons::Int64,
     push!(to_select,3)
     for j in to_select
         job = nr[sim["job"] .== j]
-        
+
         available = job[sim["isolation_status"][job] .== false]
         if length(available)/length(job) > occ
             w = sample(job, round(Int,occ*length(job)), replace=false)
@@ -630,7 +630,7 @@ function generate_pair_infections(sim::Dict, i_day::Int, t_pair::Array{Float64,1
 
         p1 = zeros(length(inf))
         p2 = zeros(length(inf))
-        
+
         for (i_inf, infp) in enumerate(inf)
             pair_col = Bool.((pairs[1,:] .== infp) + (pairs[2,:] .== infp))
             p1[i_inf] = infection_rate_F2F_outside * t_pair[pair_col][1]
@@ -1054,7 +1054,7 @@ function get_package_infections(infpairs::Array{Int64,2}, sim::Dict, NP::Int64,
             end
         end
         InfPairsNew = vcat(DriversInfectors, DriversInfected,
-                           package_contact .* ones(length(DriversInfected))) #packages labelled with zeros
+                           package_contact .* ones(Int64,length(DriversInfected))) #packages labelled with zeros
 
         return hcat(infpairs, InfPairsNew), PkgIAD, DropoffAssignment
     else
@@ -1246,7 +1246,7 @@ function update_testing_state!(sim::Dict, i_day::Int)
     sim["testing_paused"][resume_testing] .= false
 end
 
-function do_testing!(sim::Dict, testing_params::Dict, i_day::Int, 
+function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
                      workpairs::Array{Int64,2} = Array{Int64,2}(undef,2,0))
     #get all non susceptibles
     nr = 1:sim["Ntot"]
@@ -1289,23 +1289,23 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
                        (sim["isolation_time"][will_isolate] .> isol_day)))
     to_update = will_isolate[bool_update_isol_time]
     sim["isolation_time"][to_update] .= isol_day[bool_update_isol_time]
-    
-    
+
+
     #locate partners for those who will isolate
     partners = zeros(Int64, length(to_update))
     if length(pairs) > 0
         partners .= find_partner.(Ref(pairs),to_update)
     end
-    
+
     # print(isol_day,'\n')
     # print(sim["isolation_time"][will_isolate],'\n')
-    
-    
-    
+
+
+
     for (i,ip) in enumerate(to_update)
         #all partners of isolators do isolate
         if partners[i] > 0
-            if sim["isolation_time"][partners[i]] == 0 || 
+            if sim["isolation_time"][partners[i]] == 0 ||
                sim["isolation_time"][partners[i]] > sim["isolation_time"][ip]
                 sim["isolation_time"][partners[i]] = sim["isolation_time"][ip]
                 if sim["infection_status"][ip] == Susc || sim["infection_status"][ip] == Recd
@@ -1321,7 +1321,7 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
             sim["isolating_due_to_true_test"][ip] = true
         end
     end
-    
+
 #     if length(to_update) > 0
 #         print(i_day, '\n')
 #         print("Isolators: ", to_update, '\n')
@@ -1329,7 +1329,7 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
 #         print("Isol times: ", sim["isolation_time"][to_update], '\n')
 #         print("Isol times p: ", sim["isolation_time"][partners[partners .> 0]], '\n')
 #     end
-    
+
     sim["testing_paused"][will_isolate] .= true
     sim["resume_testing"][will_isolate] .= i_day + testing_params["delay"] +
                                            testing_params["test_pause"]
@@ -1501,7 +1501,7 @@ function sim_setup!(sim::Dict, InfInit::Int64, i_day::Int64, Ndays::Int64)
     index_case = infect_random!(sim,InfInit,i_day)
     sim_summary = basic_sim_setup(sim,i_day,Ndays)
     sim_summary["IndexCaseInfections"] = zeros(Int64,Ndays)
-    sim_summary["IndexCase"] = index_case 
+    sim_summary["IndexCase"] = index_case
     sim_summary["IndexCaseInfections"] = 0
     sim_summary["IndexCaseInfectivity"] = sim["inf_mag"][index_case]
     sim_summary["IndexCasePeakVL"] = sim["VL_mag"][index_case]
@@ -1576,7 +1576,7 @@ function sim_loop!(sim::Dict, sim_summary::Dict, i_day::Int, occ::Float64,  np::
     else
         infpairs = do_infections_randomly!(infpairs, sim, i_day)
     end
-        
+
     update_sim_summary!(sim_summary, sim, i_day, length(pkg_infectors), infpairs;
                         CinfsD = sum(cust_infections_drivers[2,:]),
                         CinfsP = sum(cust_infections_packages[2,:]))
