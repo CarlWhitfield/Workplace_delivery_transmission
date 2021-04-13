@@ -698,6 +698,7 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
     # d_assignment = zeros(Int64,NP)
     NPavailable = collect(1:NP)
     #generate packages infected by loaders
+    PkgNosInfected = []
     if length(InfLoaders) > 0
         #now InfLoaders either contains infectious loaders or loader pairs
         #the latter are treated as a unit with infectivity equal to their combined infectivitiy
@@ -722,6 +723,7 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
                         StimesAtPickup = vcat(StimesAtPickup, sth[Iapcond])
                         PDAgen = sample(NPavailable, sum(Iapcond), replace=false)  #generate package number
                         filter!(eh -> !(eh in PDAgen), NPavailable)  #remove PDAgen from NP available
+                        push!.(Ref(PkgNosInfected), PDAgen)
                         Nd = 1:length(AllDrivers)
                         for p in PDAgen  #for each package number generated, assign to driver based on cumsum
                             Dbool = (p .> (vcat([0],DAorder[1:(end-1)]) .* (p .< DAorder)))
@@ -731,6 +733,8 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
                 end
             end
         end
+        print("Packages infected: ", sort(PkgNosInfected), "\n")
+        print("IDDriverPickup: ", IDDriverPickup. "\n")
     end
 
     #package infections by drivers here
@@ -739,10 +743,10 @@ function generate_infectious_packages(sim::Dict, NP::Int64, AllDrivers::Array{In
         #the latter are treated as a unit with infectivity equal to their combined infectivitiy
         DInfPkgs = sum(NAs[InfDrivers])  #packages handled by infectious drivers or driver pairs
         if DInfPkgs > 0
-            NDIPinfected = zeros(Int64,length(InfDrivers))
-            ndip = 1:length(DInfPkgs)
-            for i in 1:length(AllDrivers)
-                iDpkgs = NAs[AllDrivers[i]]
+            NDIPinfected = zeros(Int64,length(InfDrivers))   #number of packages each driver infects
+            ndip = 1:length(DInfPkgs)        #index of all packages contacted by inf drivers
+            for i in 1:length(AllDrivers)       #loop over all drivers to find infectees
+                iDpkgs = NAs[AllDrivers[i]]     #number of packages handled by driver
                 Dtimes = zeros(iDpkgs)
                 Stimes = zeros(iDpkgs)  #store sterilisation time of all packages delivered (0 if uninfected)
                 Ilast = zeros(Int64,iDpkgs)

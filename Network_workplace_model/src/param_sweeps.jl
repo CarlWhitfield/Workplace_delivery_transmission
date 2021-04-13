@@ -617,7 +617,7 @@ function run_param_sweep_outbreak_fomite_parcel(Nrepeats::Int = 10000)
     pc = ContactsPerDay/(NDh+NLh+NOh)
     #other params
     PIsol = 0.5
-    PFC = 1.0
+    FCR = 1.0
     II = [1,2,3]
     tD = 0.25
     Phi = [0.05, 1.0]
@@ -633,7 +633,7 @@ function run_param_sweep_outbreak_fomite_parcel(Nrepeats::Int = 10000)
                     push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
                                     "p_contact"=>pc, "Pisol"=>PIsol,
                                     "InfInit"=>ii, "tD"=>tD, "phi"=>phi,
-                                    "p_friend_contact"=>PFC, "SimType"=>Outbreak_sim))
+                                    "p_friend_contact"=>FCR, "SimType"=>Outbreak_sim))
                     push!(PkgParams, Dict("p_fomite_contr"=>pfc, "p_fomite_trans"=>pft, "Dtime"=>4,
                                             "Ltime"=>4, "PkgHlife"=>3))
                 end
@@ -657,7 +657,7 @@ function run_param_sweep_outbreak_fomite_pairs(Nrepeats::Int = 10000)
     pc = ContactsPerDay/(NDh+NLh+NOh)
     #other params
     PIsol = 0.5
-    PFC = 1.0
+    FCR = 1.0
     II = [1,2,3]
     Phi = 0.05
     iswo = [true, false]
@@ -678,7 +678,7 @@ function run_param_sweep_outbreak_fomite_pairs(Nrepeats::Int = 10000)
                             push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
                                                 "p_contact"=>pc, "Pisol"=>PIsol,
                                                 "InfInit"=>ii, "tD"=>tD, "phi"=>Phi,
-                                                "p_friend_contact"=>PFC, "SimType"=>Outbreak_sim))
+                                                "p_friend_contact"=>FCR, "SimType"=>Outbreak_sim))
                             push!(PairParams, Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
                                                    "fixed_driver_pairs"=>fix, "fixed_loader_pairs"=>fix,
                                                    "is_window_open"=>wo, "pair_isolation"=>pih))
