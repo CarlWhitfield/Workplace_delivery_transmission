@@ -10,29 +10,32 @@ const PCR_mass_protocol = "PCR_mass_testing"
 const LFD_mass_protocol = "LFD_mass_testing"
 
 #VL trajectory params (Kissler)
-const alpha_onset = 1.1
 const beta_onset = 0.7
-const alpha_peak = 2.3
+const alpha_onset = 1.5*beta_onset
 const beta_peak = 0.7
+const alpha_peak = 3.5*beta_peak
 const alpha_decay = 2.4
 const beta_decay = 0.3
 const peakVL_mean = 7.533
 const peakVL_sd = 1.164
-#PCR swab params (invented)
-const swab_peak_accuracy = 0.97
-const swab_midpoint = 2.0
-const swab_disp = 1.0
-const VL_cutoff = 0.0
+#PCR swab params (Smith et al. JCMB)
+const PCR_VL0 = 8.522/4.408
+const PCR_VLdisp = 4.408
+const PCR_sens_max = 0.85 #assumed
+const PCR_VL_cutoff = 2.0 #assumed (from various sources)
 #LFD params (Porton Down)
-const LFD_PDcurve_b0 = -3.60
-const LFD_PDcurve_b1 = 1.22
+const LFD_VLmean = 10.836/2.680
+const LFD_VLstd = 1.0/2.680
+const LFD_sens_max = 0.75 #assumed
 #VL ~ infectivity relation (Marks)
 const inf_dep = 1.3
-const VL_ref = mean(Normal(peakVL_mean,peakVL_sd))
+const VL_ref = peakVL_mean
 const PIsigma = 0.5
 const PImu = -0.5*PIsigma^2
 #Viral load where people stop being infectious
-const inf_VL_cutoff = 0.0 #3.0 -- should only have minor effect
+const inf_VL_cutoff = 6.0 #3.0 -- should only have minor effect
+const j0scale = 4.0/(exp(log(inf_dep)^2*peakVL_sd^2/2)*(1 + 
+                erf((peakVL_mean - inf_VL_cutoff + log(inf_dep)*peakVL_sd^2)/(sqrt(2)*peakVL_sd))))
 #correlation gradient between peak_inf and pasymp
 const pasymp_vl7 = 0.62
 const pasymp_vl89 = 0.5
@@ -42,6 +45,9 @@ const asymp_frac = cdf(Normal(peakVL_mean,peakVL_sd),7.0)*pasymp_vl7 +
     (1 - cdf(Normal(peakVL_mean,peakVL_sd),9.0))*pasymp_vl10
 #relative infectivity of asymptomatics
 const mean_asymp = 0.5
+#symp time distribution
+const symp_beta = 4.84 / 2.6^2
+const symp_alpha = 4.84 * symp_beta
 
 function generate_peak_viral_loads(Ntot::Int)
     return rand(Normal(peakVL_mean,peakVL_sd),Ntot)
@@ -65,6 +71,7 @@ function build_viral_load_distributions!(sim::Dict)
     OTs = generate_onset_times(Ntot)
     PTs = generate_peak_times(Ntot)
     DTs = generate_decay_times(Ntot)
+    STs = zeros(Ntot)
     v = zeros.(Int64.(ceil.(OTs .+ PTs .+ DTs .+ 1)))
     for n in 1:Ntot
         m_up = PVLs[n]/PTs[n]
@@ -79,9 +86,12 @@ function build_viral_load_distributions!(sim::Dict)
         v[n][cond1] = m_up .* (t[cond1] .- OTs[n])
         cond2 = ((i .> i2) .* (i .<= i3))
         v[n][cond2] = PVLs[n] .- m_down .* (t[cond2] .- OTs[n] .- PTs[n])
+        Strunc = truncated(Gamma(symp_alpha,1.0/symp_beta), OTs[n], OTs[n] + PTs[n] + DTs[n])
+        STs[n] = rand(Strunc)
     end
     sim["VL_mag"] = PVLs
-    sim["symp_time"] = OTs .+ PTs
+    sim["peak_vl_time"] = OTs .+ PTs
+    sim["symp_time"] = STs
     sim["VL_profiles"] = v
     sim["decay_time"] = DTs
 end
@@ -98,25 +108,37 @@ function generate_peak_inf(peak_VL::Float64, asymp::Bool)
 end
 
 function infectivity(VL::Array{Float64,1}, peak_inf::Float64, peak_VL::Float64)
-    #assume infectivity scales linearly over time with log10 copies/ml above cutoff
     j = zeros(length(VL))
-    j[VL .> inf_VL_cutoff] =  peak_inf .* (VL[VL .> inf_VL_cutoff] .- inf_VL_cutoff) ./ (peak_VL - inf_VL_cutoff)
+    t = 0:(length(VL)-1)
+    cond1 = (VL .> inf_VL_cutoff) 
+    j[cond1] = peak_inf .* (VL[cond1] -  inf_VL_cutoff) ./ (peak_VL - inf_VL_cutoff)
     return j
 end
+
+# function infectivity_alt(VL::Array{Float64,1}, peak_inf::Float64, peak_VL::Float64, peak_VL_time::Float64, decay_time::Float64)
+#     #assume infectivity scales linearly over time with log10 copies/ml above cutoff
+#     j = zeros(length(VL))
+#     t = 0:(length(VL)-1)
+#     cond1 = (VL .> inf_VL_cutoff) 
+#     j[cond1] = peak_inf .* (VL[cond1] .- inf_VL_cutoff) ./ (peak_VL - inf_VL_cutoff)
+#     cond2 = (VL .> inf_VL_cutoff) .* (t .>= peak_VL_time)
+#     j[cond2] = peak_inf .* (1 .+ (peak_VL_time .- t[cond2])) ./ (0.38 * decay_time)
+
+#     return j
+# end
 
 function logistic_function(x::Float64, x0::Float64, k::Float64, ymax::Float64)
     return (ymax / (1  + exp(-k*(x-x0))))
 end
 
-function swab_positive_prob(VL::Float64)
-    #given viral load VL, assume this is the probability that some virus makes it onto the swab -- this could be improved by a more mechanistic testing model
-    return logistic_function(VL, swab_midpoint, swab_disp, swab_peak_accuracy)
+function probit_function(x::Float64, x0::Float64, xstd::Float64, ymax::Float64)
+    return ymax * cdf(Normal(x0,xstd),x)
 end
 
 function PCRtest_positive_prob(VL::Float64)
     #assume PCR is 100% accurate at detecting viral material on swab below Ct = 40
-    if VL > VL_cutoff
-        return swab_positive_prob(VL)
+    if VL > PCR_VL_cutoff
+        return logistic_function(VL, PC_VL0, PCR_VLdisp, PCR_sens_max)
     else
         return 0
     end
@@ -124,12 +146,7 @@ end
 
 function LFDtest_positive_prob(VL::Float64, sens_rel::Float64)
     #sens rel is 1 in Peto, could scale this for self-administering effects (sens rel < 1)
-    if VL > VL_cutoff
-        return (sens_rel * swab_positive_prob(VL) /
-               (1 + exp(-LFD_PDcurve_b1*VL - LFD_PDcurve_b0)))
-    else
-        return 0
-    end
+    return probit_function(VL, LFD_VLmean, LFD_VLstd, LFD_sens_max)
 end
 
 function generate_isolations(Ntot::Int, Pisol::Float64)
