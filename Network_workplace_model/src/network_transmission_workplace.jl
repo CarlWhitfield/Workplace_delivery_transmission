@@ -204,14 +204,10 @@ function init(Params)
     sim["job"][(Params["ND"]+Params["NL"]+1):(Params["ND"]+Params["NL"]+Params["NO"])] .= 3
     build_viral_load_distributions!(sim)
     sim["symp_day"] = Int64.(round.(rand(0:1,Ntot) .+ sim["symp_time"]))
-    sim["asymptomatic"][generate_asymptomatics(sim["VL_mag"])] .= true
-    sim["inf_mag"] .= generate_peak_inf.(sim["VL_mag"], sim["asymptomatic"])
     sim["will_isolate"][generate_isolations(Ntot, Params["Pisol"])] .= true
     nr = 1:sim["Ntot"]
     sim["non_isolators"] = nr[(sim["will_isolate"] .== false)]
     sim["will_isolate"][sim["asymptomatic"]] .= false #asymptomatics don't self isolate, but are not "non isolators"
-    sim["infection_profiles"] .= infectivity.(sim["VL_profiles"], sim["inf_mag"], sim["VL_mag"])
-    sim["days_infectious"] = length.(sim["infection_profiles"])
 
     return sim
 end
