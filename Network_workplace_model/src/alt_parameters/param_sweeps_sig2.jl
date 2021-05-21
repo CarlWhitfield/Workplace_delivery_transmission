@@ -1,5 +1,5 @@
 include("network_transmission_workplace_sig2.jl")
-include("dataframe_write.jl")
+include("../dataframe_write.jl")
 
 #Check this works
 function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
@@ -10,7 +10,7 @@ function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
                 PairParams::Array{Dict{Any,Any},1} = fill(Dict(),length(ParamsVec)),
                 IsTesting::Array{Bool,1} = zeros(Bool,length(ParamsVec)),
                 TestingParams::Array{Dict{Any,Any},1} = fill(Dict(),length(ParamsVec)),
-                filename="output.csv", output::Bool = true,
+                filename="output_sig2.csv", output::Bool = true,
                 Incidence::Array{Float64,1} = zeros(Float64, length(OccPerDay)),
                 Prevalence::Array{Float64,1} = zeros(Float64, length(OccPerDay)))
 
@@ -71,7 +71,7 @@ function run_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
         end
     end
 
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec, filename="param_sweep.csv")
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec, filename="param_sweep_sig2.csv")
     return df
 end
 
@@ -119,7 +119,7 @@ function run_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     end
 
     df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec,
-                  filename="param_sweep_pairs.csv", IsPairs = ones(Bool,length(PairParams)),
+                  filename="param_sweep_pairs_sig2.csv", IsPairs = ones(Bool,length(PairParams)),
                   PairParams = PairParams)
     return df
 end
@@ -157,7 +157,7 @@ function run_presenteeism_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     end
 
     df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;
-                  NPPerDay = NPvec, filename="presenteeism_param_sweep.csv")
+                  NPPerDay = NPvec, filename="presenteeism_param_sweep_sig2.csv")
     return df
 end
 
@@ -199,7 +199,7 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
 
     df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec,
                   IsPairs = ones(Bool,length(PairParams)), PairParams = PairParams,
-                  filename="presenteeism_param_sweep_pairs.csv")
+                  filename="presenteeism_param_sweep_pairs_sig2.csv")
     return df
 end
 
@@ -269,7 +269,7 @@ function run_testing_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     df2["test_pause"] = zeros(nrow(df2))
     dfout = vcat(df,df2)
 
-    CSV.write("testing_sweep.csv", dfout)
+    CSV.write("testing_sweep_sig2.csv", dfout)
 
     return df
 end
@@ -349,7 +349,7 @@ function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     df2["test_pause"] = zeros(nrow(df2))
     df = vcat(df,df2)
 
-    CSV.write("testing_sweep_pairs.csv", df)
+    CSV.write("testing_sweep_pairs_sig2.csv", df)
     return df
 end
 
@@ -423,7 +423,7 @@ function run_testing_sweep_fixedprev_scenario_parcel(Prev_val::Float64, Nrepeats
     df2["test_pause"] = zeros(nrow(df2))
     dfout = vcat(df,df2)
 
-    fname = string("testing_scenario_parcel_prev",string(100*Prev_val),".csv")
+    fname = string("testing_scenario_parcel_prev",string(100*Prev_val),"_sig2.csv")
 
     CSV.write(fname, dfout)
 
@@ -507,7 +507,7 @@ function run_testing_sweep_fixedprev_scenario_pairs(Prev_val::Float64, Nrepeats:
     df2["test_pause"] = zeros(nrow(df2))
     df = vcat(df,df2)
 
-    fname = string("testing_scenario_pairs_prev",string(100*Prev_val),".csv")
+    fname = string("testing_scenario_pairs_prev",string(100*Prev_val),"_sig2.csv")
     CSV.write(fname, df)
     return df
 end
@@ -548,7 +548,7 @@ function run_param_sweep_outbreak_fomite_parcel(Nrepeats::Int = 10000)
         end
     end
 
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec, filename="param_sweep_fomite.csv")
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec, filename="param_sweep_fomite_sig2.csv")
     return df
 end
 
@@ -599,7 +599,7 @@ function run_param_sweep_outbreak_fomite_pairs(Nrepeats::Int = 10000)
     end
 
     df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams; NPPerDay = NPvec,
-                  filename="param_sweep_pairs_fomite.csv", IsPairs = ones(Bool,length(PairParams)),
+                  filename="param_sweep_pairs_fomite_sig2.csv", IsPairs = ones(Bool,length(PairParams)),
                   PairParams = PairParams)
     return df
 end

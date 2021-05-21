@@ -1,4 +1,4 @@
-include("viral_load_infectivity_testpos.jl")
+include("../viral_load_infectivity_testpos.jl")
 
 using Plots
 using Cairo

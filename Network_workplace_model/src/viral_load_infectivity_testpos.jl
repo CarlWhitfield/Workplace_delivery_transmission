@@ -4,6 +4,7 @@ using CSV
 using Distributions
 using Random
 using StatsBase
+using SpecialFunctions
 
 #testing protocol definitions
 const PCR_mass_protocol = "PCR_mass_testing"
@@ -34,7 +35,7 @@ const PIsigma = 0.5
 const PImu = -0.5*PIsigma^2
 #Viral load where people stop being infectious
 const inf_VL_cutoff = 6.0 #3.0 -- should only have minor effect
-const j0scale = 4.0/(exp(log(inf_dep)^2*peakVL_sd^2/2)*(1 + 
+const j0scale = 4.0/(exp(log(inf_dep)^2*peakVL_sd^2/2)*(1 +
                 erf((peakVL_mean - inf_VL_cutoff + log(inf_dep)*peakVL_sd^2)/(sqrt(2)*peakVL_sd))))
 #correlation gradient between peak_inf and pasymp
 const pasymp_vl7 = 0.62
@@ -110,8 +111,8 @@ end
 function infectivity(VL::Array{Float64,1}, peak_inf::Float64, peak_VL::Float64)
     j = zeros(length(VL))
     t = 0:(length(VL)-1)
-    cond1 = (VL .> inf_VL_cutoff) 
-    j[cond1] = peak_inf .* (VL[cond1] -  inf_VL_cutoff) ./ (peak_VL - inf_VL_cutoff)
+    cond1 = (VL .> inf_VL_cutoff)
+    j[cond1] = peak_inf .* (VL[cond1] .-  inf_VL_cutoff) ./ (peak_VL - inf_VL_cutoff)
     return j
 end
 
@@ -119,7 +120,7 @@ end
 #     #assume infectivity scales linearly over time with log10 copies/ml above cutoff
 #     j = zeros(length(VL))
 #     t = 0:(length(VL)-1)
-#     cond1 = (VL .> inf_VL_cutoff) 
+#     cond1 = (VL .> inf_VL_cutoff)
 #     j[cond1] = peak_inf .* (VL[cond1] .- inf_VL_cutoff) ./ (peak_VL - inf_VL_cutoff)
 #     cond2 = (VL .> inf_VL_cutoff) .* (t .>= peak_VL_time)
 #     j[cond2] = peak_inf .* (1 .+ (peak_VL_time .- t[cond2])) ./ (0.38 * decay_time)
@@ -138,7 +139,7 @@ end
 function PCRtest_positive_prob(VL::Float64)
     #assume PCR is 100% accurate at detecting viral material on swab below Ct = 40
     if VL > PCR_VL_cutoff
-        return logistic_function(VL, PC_VL0, PCR_VLdisp, PCR_sens_max)
+        return logistic_function(VL, PCR_VL0, PCR_VLdisp, PCR_sens_max)
     else
         return 0
     end
@@ -166,7 +167,7 @@ end
 
 function init_VL_and_infectiousness(Ntot::Int, Pisol::Float64)
     #simulate Ntot people with baseline isolation probability Pisol
-    sim = Dict("Ntot"=>Ntot, "symp_time"=>-ones(Int64, Ntot), 
+    sim = Dict("Ntot"=>Ntot, "symp_time"=>-ones(Int64, Ntot),
                "asymptomatic"=>zeros(Bool, Ntot),
                "isolation_time"=>zeros(Int64, Ntot),
                "will_isolate"=>zeros(Bool, Ntot),
@@ -184,7 +185,7 @@ function init_VL_and_infectiousness(Ntot::Int, Pisol::Float64)
     sim["will_isolate"][sim["asymptomatic"]] .= false #asymptomatics don't self isolate, but are not "non isolators"
     sim["infection_profiles"] .= infectivity.(sim["VL_profiles"], sim["inf_mag"], sim["VL_mag"])
     sim["days_infectious"] = length.(sim["infection_profiles"])
-    
+
     return sim
 end
 
