@@ -35,8 +35,9 @@ const PIsigma = 0.5
 const PImu = -0.5*PIsigma^2
 #Viral load where people stop being infectious
 const inf_VL_cutoff = 6.0 #3.0 -- should only have minor effect
-const j0scale = 4.0/(exp(log(inf_dep)^2*peakVL_sd^2/2)*(1 +
-                erf((peakVL_mean - inf_VL_cutoff + log(inf_dep)*peakVL_sd^2)/(sqrt(2)*peakVL_sd))))
+#this scaling means that, on average, p_inf is approx 0.06 for hour long face-to-face contacts within 14 days of infection.
+const j0scale = 4.4 * 1.1 *(4.0/(exp(log(inf_dep)^2*peakVL_sd^2/2)*(1 +
+                erf((peakVL_mean - inf_VL_cutoff + log(inf_dep)*peakVL_sd^2)/(sqrt(2)*peakVL_sd)))))
 #correlation gradient between peak_inf and pasymp
 const pasymp_vl7 = 0.62
 const pasymp_vl89 = 0.5
