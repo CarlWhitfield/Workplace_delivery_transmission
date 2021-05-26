@@ -839,7 +839,7 @@ function run_testing_sweep_variableprev_scenario_parcel(Prev::Array{Float64,1},
     df2["test_pause"] = zeros(nrow(df2))
     dfout = vcat(df,df2)
 
-    fname = string("testing_scenario_parcel_prev",string(100*Prev_val),".csv")
+    fname = string("testing_varscenario_parcel_prev",string(100*Prev_val),".csv")
 
     CSV.write(fname, dfout)
 
@@ -922,7 +922,7 @@ function run_testing_sweep_variableprev_scenario_pairs(Prev::Array{Float64,1},
     df2["test_pause"] = zeros(nrow(df2))
     df = vcat(df,df2)
 
-    fname = string("testing_scenario_pairs_prev",string(100*Prev_val),".csv")
+    fname = string("testing_varscenario_pairs_prev",string(100*Prev_val),".csv")
     CSV.write(fname, df)
     return df
 end
