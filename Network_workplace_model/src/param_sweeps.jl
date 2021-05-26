@@ -927,3 +927,167 @@ function run_testing_sweep_variableprev_scenario_pairs(Prev::Array{Float64,1},
     CSV.write(fname, df)
     return df
 end
+
+function run_testing_variableprev_wpsize_sens_parcel(Prev::Array{Float64,1},
+        Inc::Array{Float64,1}, Nrepeats::Int = 10000)
+    NWeeks = Int64(ceil(length(Prev)/7))
+    NPh = [250,500,1000,1500,6000,9000,18000]
+    OccPattern = repeat([0.87,1.0,1.0,0.98,0.91,0.55,0],NWeeks)
+    OccPattern = OccPattern[1:length(Prev)]
+    RandContacts = 2.0
+
+    #sweep these two in unison
+    phi = 0.05
+    tD = 0.25
+    PIsol = 0.5
+    Tperiod = 2:2:14
+    NCP = 1.0
+    Delay = [0,0,1,2]
+    TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
+    Test_pause = [21,90,90,90]
+
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    df = DataFrame()
+    for (i, NP) in enumerate(NPh)
+        NPvec = Int64.(round.(NP*OccPattern))
+        NDh = Int64(round(NP/80))
+        NLh = Int64(round(NP/150))
+        NOh = Int64(round(NP/300))
+        pc = RandContacts/(NDh + NLh + NOh)
+        for tp in Tperiod
+            for k in 1:length(TestType)
+                push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                        "p_contact"=>pc, "Pisol"=>PIsol,
+                        "InfInit"=>0, "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
+                        "SimType"=>Scenario_sim))
+                push!(TestParamVec, Dict("new_comply_prob"=>NCP, "tperiod"=>tp,
+                      "protocol"=>TestType[k], "specificity"=>0.999,
+                      "delay"=>Delay[k], "test_pause"=>Test_pause[k]))
+                push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                             "Ltime"=>1/6, "PkgHlife"=>0.5))
+            end
+        end
+        if i == 1
+            df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;
+                  NPPerDay = NPvec, IsTesting=ones(Bool,length(ParamVec)),
+                  TestingParams=TestParamVec, output = false, Incidence = Inc,
+                  Prevalence = Prev)
+        else
+            dfh = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;
+                      NPPerDay = NPvec, IsTesting=ones(Bool,length(ParamVec)),
+                      TestingParams=TestParamVec, output = false, Incidence = Inc,
+                      Prevalence = Prev)
+            df = vcat(df,dfh)
+        end
+
+        #run baseline case
+        ParamVec = Array{Dict{Any,Any},1}(undef,0)
+        PkgParams = Array{Dict{Any,Any},1}(undef,0)
+        PairParams = Array{Dict{Any,Any},1}(undef,0)
+        push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                            "p_contact"=>pc, "Pisol"=>PIsol, "InfInit"=>0,
+                            "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
+                            "SimType"=>Scenario_sim))
+        push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                            "Ltime"=>1/6, "PkgHlife"=>0.5))
+
+        df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern, PkgParams;  NPPerDay = NPvec,
+                      output = false, Incidence = Inc, Prevalence = Prev)
+
+        df2["new_comply_prob"] = zeros(nrow(df2))
+        df2["tperiod"] = zeros(nrow(df2))
+        df2["protocol"] = fill("No testing", nrow(df2))
+        df2["specificity"] = 0.999 * ones(nrow(df2))
+        df2["delay"] = zeros(nrow(df2))
+        df2["test_pause"] = zeros(nrow(df2))
+        df = vcat(df,df2)
+    end
+
+    fname = string("testing_varscenario_parcel_wpsize_prev",string(100*Prev_val),".csv")
+
+    CSV.write(fname, df)
+end
+
+function run_testing_variableprev_wpsize_sens_pairs(Prev::Array{Float64,1},
+        Inc::Array{Float64,1}, Nrepeats::Int = 10000)
+    NWeeks = Int64(ceil(length(Prev)/7))
+    NPh = [25,50,100,150,600,900,1800]
+    OccPattern = repeat([0.80,0.94,0.95,0.94,1.0,0.96,0.53],NWeeks)
+    OccPattern = OccPattern[1:length(Prev)]
+    RandContacts = 2.0
+
+    #sweep these two in unison
+    phi = 0.05
+    tD = 0.25
+    PIsol = 0.5
+    Tperiod = 2:2:14
+    NCP = 1.0
+    Delay = [0,0,1,2]
+    TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
+    Test_pause = [21,90,90,90]
+
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    df = DataFrame()
+    for (i, NP) in enumerate(NPh)
+        NPvec = Int64.(round.(NP*OccPattern))
+        NDh = Int64(2*round(NP/30))
+        NLh = Int64(2*round(NP/40))
+        NOh = Int64(round(NP/40))
+        pc = RandContacts/(NDh + NLh + NOh)
+        for tp in Tperiod
+            for k in 1:length(TestType)
+                push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                        "p_contact"=>pc, "Pisol"=>PIsol,
+                        "InfInit"=>0, "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
+                        "SimType"=>Scenario_sim))
+                push!(TestParamVec, Dict("new_comply_prob"=>NCP, "tperiod"=>tp,
+                      "protocol"=>TestType[k], "specificity"=>0.999,
+                      "delay"=>Delay[k], "test_pause"=>Test_pause[k]))
+                push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                             "Ltime"=>1/6, "PkgHlife"=>0.5))
+            end
+        end
+        if i == 1
+            df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;
+                  NPPerDay = NPvec, IsTesting=ones(Bool,length(ParamVec)),
+                  TestingParams=TestParamVec, output = false, Incidence = Inc,
+                  Prevalence = Prev)
+        else
+            dfh = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;
+                      NPPerDay = NPvec, IsTesting=ones(Bool,length(ParamVec)),
+                      TestingParams=TestParamVec, output = false, Incidence = Inc,
+                      Prevalence = Prev)
+            df = vcat(df,dfh)
+        end
+
+        #run baseline case
+        ParamVec = Array{Dict{Any,Any},1}(undef,0)
+        PkgParams = Array{Dict{Any,Any},1}(undef,0)
+        PairParams = Array{Dict{Any,Any},1}(undef,0)
+        push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                            "p_contact"=>pc, "Pisol"=>PIsol, "InfInit"=>0,
+                            "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
+                            "SimType"=>Scenario_sim))
+        push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                            "Ltime"=>1/6, "PkgHlife"=>0.5))
+
+        df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern, PkgParams;  NPPerDay = NPvec,
+                      output = false, Incidence = Inc, Prevalence = Prev)
+
+        df2["new_comply_prob"] = zeros(nrow(df2))
+        df2["tperiod"] = zeros(nrow(df2))
+        df2["protocol"] = fill("No testing", nrow(df2))
+        df2["specificity"] = 0.999 * ones(nrow(df2))
+        df2["delay"] = zeros(nrow(df2))
+        df2["test_pause"] = zeros(nrow(df2))
+        df = vcat(df,df2)
+    end
+
+    fname = string("testing_varscenario_pairs_wpsize_prev",string(100*Prev_val),".csv")
+
+    CSV.write(fname, df)
+end
