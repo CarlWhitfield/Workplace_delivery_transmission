@@ -846,7 +846,7 @@ function run_testing_sweep_variableprev_scenario_parcel(Prev::Array{Float64,1},
     return df
 end
 
-function run_testing_sweep_fixedprev_scenario_pairs(Prev::Array{Float64,1},
+function run_testing_sweep_variableprev_scenario_pairs(Prev::Array{Float64,1},
         Inc::Array{Float64,1}, Nrepeats::Int = 10000)
     NWeeks = Int64(ceil(length(Prev)/7))
     NPh = 300
