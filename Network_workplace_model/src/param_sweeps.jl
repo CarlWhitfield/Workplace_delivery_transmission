@@ -852,6 +852,7 @@ function run_testing_sweep_variableprev_scenario_pairs(Prev::Array{Float64,1},
     NPh = 300
     OccPattern = repeat([0.80,0.94,0.95,0.94,1.0,0.96,0.53],NWeeks)
     OccPattern = OccPattern[1:length(Prev)]
+    NPvec = Int64.(round.(NPh*OccPattern))
     NDh = Int64(2*round(NPh/30))
     NLh = Int64(2*round(NPh/40))
     NOh = Int64(round(NPh/40))
