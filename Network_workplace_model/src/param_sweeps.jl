@@ -769,3 +769,160 @@ function run_testing_fixedprev_wpsize_sens_pairs(Prev_val::Float64, Nrepeats::In
     CSV.write(fname, df)
 
 end
+
+function run_testing_sweep_variableprev_scenario_parcel(Prev::Array{Float64,1},
+        Inc::Array{Float64,1}, Nrepeats::Int = 10000)
+    NWeeks = Int64(ceil(length(Prev)/7))
+    NPh = 3000
+    OccPattern = repeat([0.87,1.0,1.0,0.98,0.91,0.55,0],NWeeks)
+    OccPattern = OccPattern[1:length(Prev)]
+    NPvec = Int64.(round.(NPh*OccPattern))
+    NDh = Int64(round(NPh/80))
+    NLh = Int64(round(NPh/150))
+    NOh = Int64(round(NPh/300))
+    ContactsPerDay = 2
+    pc = ContactsPerDay/(NDh+NLh+NOh)
+    #sweep these two in unison
+    phi = 0.05
+    tD = 0.25
+    PIsol = 0.5
+    NCP = [0.0,0.5,1.0]
+    Tperiod = 2:2:14
+
+    Delay = [0,0,1,2]
+    TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
+    Test_pause = [21,90,90,90]
+
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    for j in 1:3
+        for tp in Tperiod
+            for i in 1:length(TestType)
+                push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                        "p_contact"=>pc, "Pisol"=>PIsol,
+                        "InfInit"=>0, "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
+                        "SimType"=>Scenario_sim))
+                push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
+                      "protocol"=>TestType[i], "specificity"=>0.999,
+                      "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
+                push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                             "Ltime"=>1/6, "PkgHlife"=>0.5))
+            end
+        end
+    end
+
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;
+                  NPPerDay = NPvec, IsTesting=ones(Bool,length(ParamVec)),
+                  TestingParams=TestParamVec, output = false, Incidence = Inc,
+                  Prevalence = Prev)
+
+    #run baseline case
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    PairParams = Array{Dict{Any,Any},1}(undef,0)
+    push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                        "p_contact"=>pc, "Pisol"=>PIsol, "InfInit"=>0,
+                        "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
+                        "SimType"=>Scenario_sim))
+    push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                        "Ltime"=>1/6, "PkgHlife"=>0.5))
+
+    df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern, PkgParams;  NPPerDay = NPvec,
+                  output = false, Incidence = Inc, Prevalence = Prev)
+
+    df2["new_comply_prob"] = zeros(nrow(df2))
+    df2["tperiod"] = zeros(nrow(df2))
+    df2["protocol"] = fill("No testing", nrow(df2))
+    df2["specificity"] = 0.999 * ones(nrow(df2))
+    df2["delay"] = zeros(nrow(df2))
+    df2["test_pause"] = zeros(nrow(df2))
+    dfout = vcat(df,df2)
+
+    fname = string("testing_scenario_parcel_prev",string(100*Prev_val),".csv")
+
+    CSV.write(fname, dfout)
+
+    return df
+end
+
+function run_testing_sweep_fixedprev_scenario_pairs(Prev::Array{Float64,1},
+        Inc::Array{Float64,1}, Nrepeats::Int = 10000)
+    NWeeks = Int64(ceil(length(Prev)/7))
+    NPh = 300
+    OccPattern = repeat([0.80,0.94,0.95,0.94,1.0,0.96,0.53],NWeeks)
+    OccPattern = OccPattern[1:length(Prev)]
+    NDh = Int64(2*round(NPh/30))
+    NLh = Int64(2*round(NPh/40))
+    NOh = Int64(round(NPh/40))
+    ContactsPerDay = 2
+    pc = ContactsPerDay/(NDh+NLh+NOh)
+    #sweep these two in unison
+    phi = 0.05
+    tD = 0.25
+    PIsol = 0.5
+    NCP = [0.0,0.5,1.0]
+    Tperiod = 2:2:14
+
+    Delay = [0,0,1,2]
+    TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
+    Test_pause = [21,90,90,90]
+
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    PairParams = Array{Dict{Any,Any},1}(undef,0)
+    for j in 1:3
+        for tp in Tperiod
+            for i in 1:length(TestType)
+
+                push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                        "p_contact"=>pc, "Pisol"=>PIsol, "InfInit"=>0,
+                        "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
+                        "SimType"=>Scenario_sim))
+                push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
+                      "protocol"=>TestType[i], "specificity"=>0.999,
+                      "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
+                push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                             "Ltime"=>1/6, "PkgHlife"=>0.5))
+                push!(PairParams, Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
+                                        "fixed_driver_pairs"=>true, "fixed_loader_pairs"=>true,
+                                         "is_window_open"=>false, "pair_isolation"=>true))
+            end
+        end
+    end
+
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern, PkgParams;  NPPerDay = NPvec,
+                  IsTesting=ones(Bool,length(ParamVec)), TestingParams=TestParamVec,
+                  IsPairs = ones(Bool,length(PairParams)), PairParams = PairParams,
+                  output = false, Incidence = Inc, Prevalence = Prev)
+
+    #run baseline case
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    PairParams = Array{Dict{Any,Any},1}(undef,0)
+    push!(ParamVec, Dict("ND"=>NDh, "NL"=>NLh, "NO"=>NOh,
+                        "p_contact"=>pc, "Pisol"=>PIsol, "InfInit"=>0,
+                        "tD"=>tD, "phi"=>phi, "p_friend_contact"=>1.0,
+                        "SimType"=>Scenario_sim))
+    push!(PkgParams, Dict("p_fomite_contr"=>0.0, "p_fomite_trans"=>0.0, "Dtime"=>1/6,
+                        "Ltime"=>1/6, "PkgHlife"=>0.5))
+    push!(PairParams, Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
+                            "fixed_driver_pairs"=>true, "fixed_loader_pairs"=>true,
+                            "is_window_open"=>false, "pair_isolation"=>true))
+
+    df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern, PkgParams;  NPPerDay = NPvec,
+                  IsPairs = ones(Bool,length(PairParams)), PairParams = PairParams,
+                  output = false, Incidence = Inc, Prevalence = Prev)
+    df2["new_comply_prob"] = zeros(nrow(df2))
+    df2["tperiod"] = zeros(nrow(df2))
+    df2["protocol"] = fill("No testing", nrow(df2))
+    df2["specificity"] = 0.999 * ones(nrow(df2))
+    df2["delay"] = zeros(nrow(df2))
+    df2["test_pause"] = zeros(nrow(df2))
+    df = vcat(df,df2)
+
+    fname = string("testing_scenario_pairs_prev",string(100*Prev_val),".csv")
+    CSV.write(fname, df)
+    return df
+end
