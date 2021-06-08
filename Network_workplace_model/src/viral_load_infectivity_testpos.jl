@@ -53,29 +53,60 @@ const mean_asymp = 0.5
 const symp_beta = 4.84 / 2.6^2
 const symp_alpha = 4.84 * symp_beta
 
+const PVLdist = Normal(peakVL_mean,peakVL_sd)
+const OTdist = Gamma(alpha_onset,1/beta_onset)
+const PTdist = Gamma(alpha_peak,1/beta_peak)
+const DTsympdist = Gamma(alpha_decay_symp,1/beta_decay)
+const DTasympdist = Gamma(alpha_decay_asymp,1.0/beta_decay)
+
+function generate_peak_viral_load()
+    return rand(PVLdist)
+end
+
+function generate_onset_time()
+    return rand(OTdist)
+end
+
+function generate_peak_times()
+    return rand(PTdist)
+end
+
+function generate_asymptomatic()
+    #randomly generate if people are asymptomatic
+    return (rand() < p_asymp)
+end
+
+function generate_decay_time(Asymp::Bool)
+    DT = 
+    if Asymp
+        DT = rand(DTasympdist)
+    else
+        DT = rand(DTsympdist)
+    end
+    return DT
+end
+
 function generate_peak_viral_loads(Ntot::Int)
-    return rand(Normal(peakVL_mean,peakVL_sd),Ntot)
+    return rand(PVLdist,Ntot)
 end
 
 function generate_onset_times(Ntot::Int)
-    return rand(Gamma(alpha_onset,1/beta_onset),Ntot)
+    return rand(OTdist,Ntot)
 end
 
 function generate_peak_times(Ntot::Int)
-    return rand(Gamma(alpha_peak,1/beta_peak),Ntot)
+    return rand(PTdist,Ntot)
 end
 
 function generate_asymptomatics(Ntot::Int)
     #randomly generate if people are asymptomatic
-    return randsubseq(1:Ntot,p_asymp)
+    return (rand(Ntot) .< p_asymp)
 end
 
-function generate_decay_times(Ntot::Int, Asymp::Array{Int64,1})
-    DTs = rand(Gamma(alpha_decay_symp,1/beta_decay),Ntot)
-    DTs[Asymp] = rand(Gamma(alpha_decay_asymp,1.0/0.3),length(Asymp))
+function generate_decay_times(Ntot::Int, Asymp::Array{Bool,1})
+    DTs = generate_decay_time.(Asymp)
     return DTs
 end
-
 
 function generate_peak_inf(peak_VL::Float64)
     #assume reference person has average infectivity of 1 (so peak of 2)
@@ -84,60 +115,61 @@ function generate_peak_inf(peak_VL::Float64)
     return r*value
 end
 
-function build_viral_load_distributions!(sim::Dict)
-    Ntot = sim["Ntot"]
-    PVLs = generate_peak_viral_loads(Ntot)
-    OTs = generate_onset_times(Ntot)
-    PTs = generate_peak_times(Ntot)
-    Asymp = generate_asymptomatics(Ntot)
-    DTs = generate_decay_times(Ntot, Asymp)
-    PInfs = generate_peak_inf.(PVLs)
-    STs = zeros(Ntot)
-    v = zeros.(Int64.(ceil.(OTs .+ PTs .+ DTs .+ 10)))
-    inf = zeros.(Int64.(ceil.(OTs .+ PTs .+ DTs .+ 1)))
-    for n in 1:Ntot
-        m_up = (PVLs[n] - VL_LOD_Kissler)/PTs[n]
-        m_down = (PVLs[n] - VL_LOD_Kissler)/DTs[n]
-        T = length(v[n])
-        i = 1:T
-        t = i .- 1
-        i1 = Int64(ceil(OTs[n]))
-        i2 = Int64(ceil(OTs[n] + PTs[n]))
-        i3 = Int64(ceil(OTs[n] + PTs[n] + DTs[n]))
-        cond1 = (i .<= i2)
-        v[n][cond1] = VL_LOD_Kissler .+ m_up .* (t[cond1] .- OTs[n])
-        cond2 = (i .> i2)
-        v[n][cond2] = PVLs[n] .- m_down .* (t[cond2] .- OTs[n] .- PTs[n])
-        Strunc = truncated(Gamma(symp_alpha,1.0/symp_beta), OTs[n], OTs[n] + PTs[n] + DTs[n])
-        STs[n] = rand(Strunc)
-        if PVLs[n] > inf_VL_cutoff
-            tinf_start = OTs[n] + (inf_VL_cutoff - VL_LOD_Kissler)/m_up
-            tinf_end = OTs[n] + PTs[n] + (PVLs[n] - inf_VL_cutoff)/m_down
-            cum_inf = zeros(T+1)
-            t_inf = collect(-1:(T-1)) .+ 0.5
-            
-            cond1 = (t_inf .>= tinf_start) .* (t_inf .<  OTs[n] + PTs[n])
-            cum_inf[cond1] = 0.5 * PInfs[n] .* (t_inf[cond1] .- tinf_start).^2 / 
-                               (OTs[n] + PTs[n] - tinf_start)
-            
-            cond2 = (t_inf .>= OTs[n] + PTs[n]) .* (t_inf .<=  tinf_end)
-            c_inf_peak = 0.5 * PInfs[n] * (OTs[n] + PTs[n] - tinf_start)
-            cum_inf[cond2] = c_inf_peak .+ PInfs[n] .* (t_inf[cond2] .- OTs[n] .- PTs[n]) .*
-                    (1.0 .- 0.5 .* (t_inf[cond2] .- OTs[n] .- PTs[n]) ./ (tinf_end  - OTs[n] - PTs[n]))
-            cum_inf[t_inf .>  tinf_end] .= 0.5*PInfs[n]*(tinf_end - tinf_start)
-            inf[n] = cum_inf[2:(T+1)] .- cum_inf[1:T]
-            nel = 1:length(t)
-            deleteat!(inf[n], nel[t .> Int64(ceil(tinf_end))])
-        end
-    end
-    sim["VL_mag"] = PVLs
-    sim["symp_time"] = STs
-    sim["VL_profiles"] = v
-    sim["infection_profiles"] = inf
-    sim["asymptomatic"][Asymp] .= true
-    sim["days_infectious"] = length.(sim["infection_profiles"])
+function generate_symp_time(OT::Float64,PT::Float64,DT::Float64)
+    Strunc = truncated(Gamma(symp_alpha,1.0/symp_beta), OT, OT + PT + DT)
 end
 
+function build_viral_load_distribution!(v::Array{Float64,1}, inf::Array{Float64,1})
+    PVL = generate_peak_viral_load()
+    OT = generate_onset_time()
+    PT = generate_peak_time()
+    Asymp = generate_asymptomatic()
+    DT = generate_decay_time(Asymp)
+    PInf = generate_peak_inf(PVL)
+    v = zeros(Int64(ceil(OT .+ PT .+ DT .+ 10)))
+    inf = zeros(Int64(ceil(OT .+ PT .+ DT .+ 1)))
+    
+    m_up = (PVL - VL_LOD_Kissler)/PT
+    m_down = (PVL - VL_LOD_Kissler)/DT
+    T = length(v)
+    i = 1:T
+    t = i .- 1
+    i1 = Int64(ceil(OT))
+    i2 = Int64(ceil(OT + PT))
+    i3 = Int64(ceil(OT + PT + DT))
+    cond1 = (i .<= i2)
+    v[cond1] = VL_LOD_Kissler .+ m_up .* (t[cond1] .- OT)
+    cond2 = (i .> i2)
+    v[cond2] = PVL .- m_down .* (t[cond2] .- OT .- PT)
+    #generate symp time
+    ST = generate_symp_time(OT,PT,DT)
+    if PVL > inf_VL_cutoff
+        tinf_start = OT + (inf_VL_cutoff - VL_LOD_Kissler)/m_up
+        tinf_end = OT + PT + (PVL - inf_VL_cutoff)/m_down
+        cum_inf = zeros(T+1)
+        t_inf = collect(-1:(T-1)) .+ 0.5
+            
+        cond1 = (t_inf .>= tinf_start) .* (t_inf .<  OT + PT)
+        cum_inf[cond1] = 0.5 * PInf .* (t_inf[cond1] .- tinf_start).^2 / 
+                               (OT + PT - tinf_start)
+            
+        cond2 = (t_inf .>= OT + PT) .* (t_inf .<=  tinf_end)
+        c_inf_peak = 0.5 * PInf * (OT + PT - tinf_start)
+        cum_inf[cond2] = c_inf_peak .+ PInf .* (t_inf[cond2] .- OT .- PT) .*
+                    (1.0 .- 0.5 .* (t_inf[cond2] .- OT .- PT) ./ (tinf_end  - OT - PT))
+        cum_inf[t_inf .>  tinf_end] .= 0.5*PInf*(tinf_end - tinf_start)
+        inf = cum_inf[2:(T+1)] .- cum_inf[1:T]
+        nel = 1:length(t)
+        deleteat!(inf, nel[t .> Int64(ceil(tinf_end))])
+    end
+    
+    return ST, PVL, Asymp
+end
+
+function build_viral_load_distributions!(sim::Dict)
+    sim["symp_time"], sim["VL_mag"], sim["asymptomatic"] .= 
+            build_viral_load_distribution!.(sim["VL_profiles"], sim["infection_profiles"])
+end
 
 # function infectivity(VL::Array{Float64,1}, peak_inf::Float64, peak_VL::Float64)
 #     j = zeros(length(VL))
@@ -185,8 +217,6 @@ function generate_isolations(Ntot::Int, Pisol::Float64)
     #randomly generate if people obey isolation or not
     return randsubseq(1:Ntot, Pisol)
 end
-
-
 
 function init_VL_and_infectiousness(Ntot::Int, Pisol::Float64)
     #simulate Ntot people with baseline isolation probability Pisol
@@ -240,4 +270,29 @@ function init_testing!(sim::Dict, testing_params::Dict, i_day::Int, Ndays::Int)
     end
 
     return test_days, test_day_counter
+end
+
+"""
+
+"""
+function plot_infection_profiles(N::Int, beta::Float64)
+    profiles = Array{Array{Float64,1},1}(undef,N)
+    VLprofiles = Array{Array{Float64,1},1}(undef,N)
+    ip = generate_incubation_periods(N)
+    alphas = gamma_ab_mode.(ip,Ref(beta))
+    mags = generate_log10_viral_load(N)
+    x = zeros(N)
+    tl = 0
+    for i in 1:N
+        profiles[i] = calculate_infectivity(mags[i], alphas[i], beta)
+        tl += length(profiles[i])
+    end
+    tl /= N
+    pp = Plots.plot(profiles[1], xlabel = "Days", ylabel = "Infectiousness")
+    for i in 2:N
+        pp = Plots.plot!(profiles[i])
+    end
+
+    Plots.display(pp)
+    return profiles
 end
