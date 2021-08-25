@@ -9,8 +9,9 @@ BasicParcelParams = Dict("ND"=>38, "NL"=>20, "NO"=>10, "NDteams"=>3, "NLteams"=>
                  "tD"=>0.05,"phi"=>0.1, "InfInit"=>0, "SimType"=>Outbreak_sim,
                  "TeamTimes"=>[0.25,1.0,1.0], "TeamsOutside"=>[true,true,false], 
                  "TeamDistances"=>[2.0,2.0,2.0], "HouseShareFactor"=>0.5, "CarShareFactor"=>0.5)
-ParcelOccPattern = 0.95 .* [0.90,1.0,1.0,0.99,0.91,0.55,0.0]
-ParcelPkgPattern = [0.74,1.0,0.95,0.92,0.84,0.31,0.0]
+ParcelOccPattern = 0.95 .* np.array([0.90,1.0,1.0,0.99,0.91,0.55,0.0])
+ParcelPkgPattern = np.array([0.74,1.0,0.95,0.92,0.84,0.31,0.0])
+ParcelPkgPattern = (6/7)*ParcelPkgPattern/np.mean(ParcelPkgPattern)
 NPparcel = 3000
 
 
@@ -23,12 +24,12 @@ BasicBulkParams = Dict("ND"=>20, "NL"=>16, "NO"=>8, "NDteams"=>2, "NLteams"=>2, 
 DefaultPairParams = Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
                   "fixed_driver_pairs"=>true, "fixed_loader_pairs"=>true,
                   "is_window_open"=>false, "pair_isolation"=>true)
-BulkOccPattern = 0.95 .* []
-BulkPkgPattern = []
+BulkOccPattern = 0.95 .* np.array([0.82, 0.98, 0.97, 0.99, 1.0, 0.84, 0.47])
+BulkPkgPattern = np.array([0.80, 0.94, 0.95, 0.94,  1.0, 0.81, 0.44])
+BulkPkgPattern = BulkPkgPattern/np.mean(BulkPkgPattern)
 NPbulk = 300
 
-SpecDefault = 0.99
-
+SpecDefault = 0.99   #Specificity
 
 #Check this works
 function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
