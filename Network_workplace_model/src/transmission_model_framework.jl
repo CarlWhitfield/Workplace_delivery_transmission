@@ -8,7 +8,7 @@
 
 
 
-include("/Users/carlwhitfield/Documents/Github/Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
+include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
 using LightGraphs
 using MetaGraphs
@@ -33,7 +33,7 @@ const mask_factor_infector = 0.25
 const mask_factor_infectee = 0.5
 const distance_factor_per_m = 0.5
 
-function return_infection_weight(distance::Float64, duration::Float64, 
+function return_infection_weight(distance::Float64, duration::Float64,
                                  outdoor::Bool)
     w = infection_rate_F2F * duration * (distance_factor_per_m^distance)
     if outdoor
@@ -42,8 +42,8 @@ function return_infection_weight(distance::Float64, duration::Float64,
     return w
 end
 
-function convert_weight_to_prob(weight::Float64, inf::Float64, 
-                     susc::Float64; mask_infector::Bool = false, 
+function convert_weight_to_prob(weight::Float64, inf::Float64,
+                     susc::Float64; mask_infector::Bool = false,
                      mask_infectee::Bool = true)
     beta = weight*inf*susc
     if mask_infector
@@ -52,7 +52,7 @@ function convert_weight_to_prob(weight::Float64, inf::Float64,
     if mask_infectee
         beta *= mask_factor_infectee
     end
-    
+
     return 1 - exp(-beta)
 end
 
@@ -75,7 +75,7 @@ Initialises the transmission model.
 
 `Psusc` = Probability an individual is susceptible at simulation start
 
-## Returns: 
+## Returns:
 
 `sim::Dict()` = Framework for storing simulation data, to be passed to other functions
 """
@@ -84,7 +84,7 @@ function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psu
     Ntot = sum(N_per_role)
     sg = LightGraphs.SimpleGraph(Ntot)
     Nj = length(N_per_role)
-    sim = Dict("Ntot"=>Ntot, "N"=>N_per_role, "job"=>zeros(Int8, Ntot), 
+    sim = Dict("Ntot"=>Ntot, "N"=>N_per_role, "job"=>zeros(Int8, Ntot),
                "Njobs"=>Nj, "inf_time"=>(zeros(Int64, Ntot) .- 1),
                 "symp_day"=>-ones(Int64, Ntot),
                 "asymptomatic"=>zeros(Bool, Ntot),
@@ -120,8 +120,8 @@ function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psu
         push!.(Ref(sim["VL_profiles"]), fill(zeros(0),n))
         istart += n
     end
-    
-    sim["would_isolate"][generate_isolations(sim["Ntot"], Pisol)] .= true   #generate propensity to isolate 
+
+    sim["would_isolate"][generate_isolations(sim["Ntot"], Pisol)] .= true   #generate propensity to isolate
     sim["susceptibility"][randsubseq(1:sim["Ntot"], 1.0 - Psusc)] .= 0.0    #generate non-susceptibles
 
     return sim
@@ -131,14 +131,14 @@ function generate_symp_day_from_time(stime::Float64)
     return Int64(floor(rand(0:1) + stime))
 end
 
-function infect_node!(sim::Dict, i::Int, time::Int, 
-                      contact_tracing_network::MetaGraphs.MetaGraph 
+function infect_node!(sim::Dict, i::Int, time::Int,
+                      contact_tracing_network::MetaGraphs.MetaGraph
                        = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"])))
-    
+
     sim["infection_status"][i] = Expd
     sim["susceptibility"][i] = 0.0
     sim["inf_time"][i] = time
-    
+
     #Generate viral load
     build_viral_load_distribution!(sim, i)
     if sim["asymptomatic"][i]
@@ -147,12 +147,12 @@ function infect_node!(sim::Dict, i::Int, time::Int,
         will_isolate = sim["would_isolate"][i]
     end
     sim["days_infectious"][i] = length(sim["infection_profiles"][i])
-    
+
     #if testing generate test positivity -- TODO
     if haskey(sim,"test_protocol")
        sim["test_pos_profiles"][i] = get_pos_profile(sim, i, sim["test_protocol"])
     end
-    
+
     #Sort out isolation
     #Assume close contact isolation is guaranteed to isolate if infected node isolates (i.e. enforced)
     if will_isolate
@@ -164,13 +164,13 @@ function infect_node!(sim::Dict, i::Int, time::Int,
         traced = neighbors(contact_tracing_network, i)
         if length(traced) > 0
             to_update = ((sim["isolation_time"][traced] .>  (time + sim["symp_day"][i])) .+
-                        (sim["isolation_time"][traced] .== 0))   
+                        (sim["isolation_time"][traced] .== 0))
             #if not isolating already or isolating later than this
             if sum(to_update) > 0
                 sim["isolation_time"][traced[to_update]] .=  time + sim["symp_day"][i]
             end
         end
-        
+
     end
 end
 
@@ -331,7 +331,7 @@ function get_network_infections(sim::Dict, i_day::Int)
         #get the edge weights (total transmission rate * contact time, can be multiple per edge)
         w = get_prop.(Ref(sim["contact_network"]),nin,nout,:weights)
         t = get_prop.(Ref(sim["contact_network"]),nin,nout,:types)
-        
+
         #fill and flatten all arrays so there is one entry for each entry
         nin_all = vcat(fill.(nin,length.(w))...)
         nout_all = vcat(fill.(nout,length.(w))...)
@@ -347,13 +347,13 @@ function get_network_infections(sim::Dict, i_day::Int)
         #print(ecprob,"\n\n")
         eind = collect(1:length(eprob))
         einf = eind[rand(length(eprob)) .< (eprob)]
-        
+
         if length(einf) > 0
-            ipairs = hcat(ipairs, [transpose(nin_all[einf]); 
+            ipairs = hcat(ipairs, [transpose(nin_all[einf]);
                     transpose(nout_all[einf]); transpose(etype[einf])])
         end
     end
-    
+
     return ipairs
 end
 
@@ -419,7 +419,7 @@ end
 """
 function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
           isolation_network::MetaGraphs.MetaGraph)
-    
+
     #do testing if test day
     if i_day == sim["test_days"][sim["test_day_counter"]]
         #get all non susceptibles
@@ -451,9 +451,9 @@ function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
         # print("Pos tests: ",nr[pos_tests],'\n')
 
         isolators = apply_positive_tests!(sim, nr[pos_tests], testing_params, i_day, isolation_network)
-        
+
         sim["test_day_counter"] += 1
-        
+
         return isolators
     else
         return Array{Int64,1}(undef,0)
@@ -471,8 +471,8 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
                                    (sim["isolation_time"][will_isolate] .> isol_day)))
     to_update = will_isolate[bool_update_isol_time]
     sim["isolation_time"][to_update] .= isol_day[bool_update_isol_time]
-    
-    bool_true_test = Bool.(sim["infection_status"][to_update] .== Susc .+ 
+
+    bool_true_test = Bool.(sim["infection_status"][to_update] .== Susc .+
                            sim["infection_status"][to_update] .== Recd)
     sim["isolating_due_to_true_test"][bool_true_test] .= true
     sim["isolating_due_to_false_test"][.!bool_true_test] .= true
@@ -495,7 +495,7 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
         end
     end
     will_isolate = unique(vcat(will_isolate, dests))
-    
+
     sim["testing_paused"][will_isolate] .= true
     sim["resume_testing"][will_isolate] .= i_day + testing_params["test_pause"]
 
@@ -601,7 +601,7 @@ function basic_sim_setup(sim::Dict, i_day::Int64, Ndays::Int64)
     for i in 1:sim["NTypes"]
         summary["InfsByType"] = zeros(Int64,(Nj,Ndays))
     end
-    
+
     return summary
 end
 
@@ -644,8 +644,8 @@ end
 function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int)
     nr = 1:sim["Ntot"]
     new_isolator_bool = sim["isolation_status"] .* (sim["isolation_time"] .== i_day)
-    isol_no_test = (sim["isolation_status"] .- sim["isolation_status_true_test"] .- 
-                   sim["isolation_status_false_test"] .- sim["isolation_status_contact_true_test"] .- 
+    isol_no_test = (sim["isolation_status"] .- sim["isolation_status_true_test"] .-
+                   sim["isolation_status_false_test"] .- sim["isolation_status_contact_true_test"] .-
                    sim["isolation_status_contact_false_test"])
     after_onset_bool = (sim["infection_status"] .== Symp)
     at_work_bool = (sim["at_work"] .== true)
@@ -669,14 +669,14 @@ function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int)
         summary["IsolatedDueToContactFalsePos"][j,i_day] = sum(jt .* sim["isolation_status_contact_false_test"])
 
         summary["NewSympIsolators"][j,i_day] = sum(jt .* isol_no_test .* new_isolator_bool)
-        summary["NewTestAsympIsolators"][j,i_day] = sum(jt .* sim["isolation_status_true_test"] .* 
+        summary["NewTestAsympIsolators"][j,i_day] = sum(jt .* sim["isolation_status_true_test"] .*
                                                 new_isolator_bool .* sim["asymptomatic"])
-        summary["NewTestSympIsolators"][j,i_day] = sum(jt .* sim["isolation_status_true_test"] .* 
+        summary["NewTestSympIsolators"][j,i_day] = sum(jt .* sim["isolation_status_true_test"] .*
                                                 new_isolator_bool .* .!(sim["asymptomatic"]))
         summary["NewFalseIsolators"][j,i_day] = sum(jt .* sim["isolation_status_false_test"] .* new_isolator_bool)
-        summary["NewContactTruePosIsolators"][j,i_day] = sum(jt .* sim["isolation_status_contact_true_test"] .* 
+        summary["NewContactTruePosIsolators"][j,i_day] = sum(jt .* sim["isolation_status_contact_true_test"] .*
                                                          new_isolator_bool)
-        summary["NewContactFalsePosIsolators"][j,i_day] = sum(jt .* sim["isolation_status_contact_false_test"] .* 
+        summary["NewContactFalsePosIsolators"][j,i_day] = sum(jt .* sim["isolation_status_contact_false_test"] .*
                                                          new_isolator_bool)
 
         summary["Presenting"][j,i_day] = sum(jt .* after_onset_bool .* at_work_bool)
@@ -707,21 +707,21 @@ end
 
 """
 # function simulate_day!(sim::Dict, i_day::Int)
-    
+
 #     #add parts of previous function that go here
-    
-    
+
+
 #     infpairs = get_network_infections(sim::Dict, i_day::Int)
 #     infpairs_reduced = do_infections_randomly!(sim, infpairs)
-    
+
 # end
-function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict, 
+function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict,
                                    OccPerDay::Array{Float64,1})
     i_day = rand(1:7)
     if TestParams["is_testing"]
-        if (TestParams["protocol"] == PCR_mass_protocol 
+        if (TestParams["protocol"] == PCR_mass_protocol
          || TestParams["protocol"] == LFD_mass_protocol)
-             sim["test_days"], sim["test_day_counter"] = 
+             sim["test_days"], sim["test_day_counter"] =
                      init_testing!(sim, TestParams, i_day, length(OccPerDay), false)
         end  #add options for other protocols here
     else
@@ -731,44 +731,44 @@ function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict,
     Anyinf = true
     if Params["SimType"] == Outbreak_sim
         sim_summary = sim_setup!(sim, Params["InfInit"], i_day, length(OccPerDay))
-        Anyinf = any(((sim["infection_status"] .== Susc) 
+        Anyinf = any(((sim["infection_status"] .== Susc)
                       .+ (sim["infection_status"] .== Recd)) .== 0)
     elseif Params["SimType"] == Scenario_sim
         sim_summary = scenario_sim_setup!(sim, Incidence, Prevalence, i_day, length(OccPerDay))
-    end 
-    
+    end
+
     return sim_summary, i_day, Anyinf
 end
 
 
-function example_sim_loop!(sim::Dict, i_day::Int,  testing::Bool, TestParams::Dict, 
+function example_sim_loop!(sim::Dict, i_day::Int,  testing::Bool, TestParams::Dict,
                            isolation_network::MetaGraphs.MetaGraph, Prev::Float64)
-    
+
 #     #do_testing
 #     if testing
 #         new_isolators = do_testing!(sim, TestParams, i_day, isolation_network)
 #     end
-    
+
 #     #update infectivity and isolation status
 #     update_all_statuses!(sim, i_day)
-    
+
 #     #update_in_work
 #     #simple thing
 #     update_in_work!(sim, at_work)
-    
+
 #     infpairs = Array{Int64,2}(undef,3,0)
-    
+
 #     #introductions
 #     infpairs = get_introductions(infpairs, sim, i_day)
-    
+
 #     #get all contacts
 #     g = #gen network
-    
+
 #     update_contact_network!(sim, g)
 #     infpairs = get_network_infections(infpairs, sim, i_day)
-    
+
 #     infpairs_final = do_infections_randomly!(infpairs, sim, i_day)
-    
+
 #     return infpairs_final
 end
 
@@ -776,7 +776,7 @@ end
 function run_example_sim(Params::Dict; visualise::Bool = false, testing::Bool=false,
            TestParams::Dict=Dict(), Incidence::Array{Float64,1} = zeros(length(OccPerDay)),
            Prevalence::Array{Float64,1} = zeros(length(OccPerDay)))
-    
+
 #     #     if visualise
 # #         sim, node_x, node_y = initialise_withvis(Params,
 # #           PairParams, degree_logmean, degree_logstd, is_network, is_pairs, Incidence, Prevalence)
@@ -784,7 +784,7 @@ function run_example_sim(Params::Dict; visualise::Bool = false, testing::Bool=fa
 # #         sim = initialise_novis(Params,
 # #           PairParams, degree_logmean, degree_logstd, is_network, is_pairs, Incidence, Prevalence)
 # #     end
-    
+
 #     i_day, Go = setup_transmission_model(sim, testing, TestParams)
 #     while Go && (i_day <= length(OccPerDay))
 #         infpairs = sim_loop_delivery_wp!(sim, sim_summary, i_day, OccPerDay[i_day],
@@ -795,16 +795,16 @@ function run_example_sim(Params::Dict; visualise::Bool = false, testing::Bool=fa
 # #         if visualise
 # #             print_infection_network(sim, fname, infpairs, node_x, node_y, pairs)
 # #         end
-    
+
 # #         if testing && (i_day == test_days[test_day_counter])
 # #             test_day_counter += 1
 # #         end
-        
+
 #         if Params["SimType"] == Outbreak_sim
 #             Go = any(((sim["infection_status"] .== Susc)
 #                   .+ (sim["infection_status"] .== Recd)) .== 0)
 #         end
-        
+
 #         i_day += 1
 #     end
 #     trim_sim_summary!(sim_summary, i_day-1, length(OccPerDay))
