@@ -33,9 +33,10 @@ function add_to_results_dataframe!(results::DataFrame, Params::Dict, SimOutput::
     for p in keys(Params)
         if p in names(results)
             if length(Params[p]) > 1
-                results[(irow_start):(irow_start+3),p] .= Params[p]
+                results[(irow_start):(irow_start+2),p] .= Params[p]
+                results[(irow_start+3),p] = NaN
             else
-                results[(irow_start):(irow_start+2),p] = Params[p]
+                results[(irow_start):(irow_start+3),p] .= Params[p]
             end
         end
     end
