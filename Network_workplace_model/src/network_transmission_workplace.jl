@@ -758,7 +758,7 @@ function get_package_and_customer_infections!(sim::Dict, NP::Int64,
            NAs::Array{Int64,1}, CustModifiers::Dict)
     
     CustInfProb = Array{Float64,1}(undef,0)
-    DriverDelivering = Array{Float64,1}(undef,0)
+    DriverDelivering = Array{Array{Int64,1},1}(undef,0)
     if NP > 0
         inf, inf_scales = get_infectivities(sim, i_day)
         d_in_work = sim["job_sorted_nodes"][1][sim["at_work"][sim["job_sorted_nodes"][1]]]
