@@ -599,7 +599,7 @@ function basic_sim_setup(sim::Dict, i_day::Int64, Ndays::Int64)
                 "InfsByType"=>Array{Array{Int64,2},1}(undef,sim["NTypes"]),
                 "ExternalIntroductions"=>zeros(Int64,(Nj,Ndays)))
     for i in 1:sim["NTypes"]
-        summary["InfsByType"] = zeros(Int64,(Nj,Ndays))
+        summary["InfsByType"][i] = zeros(Int64,(Nj,Ndays))
     end
 
     return summary
@@ -693,7 +693,11 @@ function trim_sim_summary!(sim_summary, i_day, Ndays)
     if i_day < Ndays
         for (key,value) in sim_summary
             if isa(value, Array)
-                if length(size(value)) == 1
+                if key == "InfsByType"
+                    for n in 1:length(sim_summary[key])
+                        sim_summary[key][n] = sim_summary[key][n][:,1:i_day]
+                    end
+                elseif length(size(value)) == 1
                     sim_summary[key] = sim_summary[key][1:i_day]
                 elseif length(size(value)) == 2
                     sim_summary[key] = sim_summary[key][:,1:i_day]
