@@ -32,7 +32,11 @@ function add_to_results_dataframe!(results::DataFrame, Params::Dict, SimOutput::
     #params and results common to all staff
     for p in keys(Params)
         if p in names(results)
-            results[(irow_start):(irow_start+3),p] .= Params[p]
+            if length(Params[p]) > 1
+                results[(irow_start):(irow_start+3),p] .= Params[p]
+            else
+                results[(irow_start):(irow_start+2),p] = Params[p]
+            end
         end
     end
     results[(irow_start):(irow_start+3),"Iteration"] .= Niteration
