@@ -646,7 +646,7 @@ end
 """
 
 """
-function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int)
+function update_sim_summary!(summary::Dict, sim::Dict, inf_pairs::Array{Int64,2}, i_day::Int)
     nr = 1:sim["Ntot"]
     new_isolator_bool = sim["isolation_status"] .* (sim["isolation_time"] .== i_day)
     isol_no_test = (sim["isolation_status"] .- sim["isolation_status_true_test"] .-
@@ -655,7 +655,7 @@ function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int)
     after_onset_bool = (sim["infection_status"] .== Symp)
     at_work_bool = (sim["at_work"] .== true)
     for j in 1:sim["Njobs"]
-        jt = (sim["job"] .== j)
+        jt = (sim["job"] .== j)  #update this
 
         summary["Susceptible"][j,i_day] = sum(jt .* (sim["infection_status"] .== Susc))
         summary["Recovered"][j,i_day] = sum(jt .* (sim["infection_status"] .== Recd))
@@ -686,6 +686,11 @@ function update_sim_summary!(summary::Dict, sim::Dict, i_day::Int)
 
         summary["Presenting"][j,i_day] = sum(jt .* after_onset_bool .* at_work_bool)
         summary["Asymptomatic"][j,i_day] = sum(jt .* after_onset_bool .* sim["asymptomatic"])
+    end
+    
+    for k in 1:length(inf_pairs[1,:])
+        j = sim["job"][inf_pairs[2,k]]  #job of infectee
+        summary["InfsByType"][inf_pairs[3,k]][j,i_day] += 1
     end
 end
 

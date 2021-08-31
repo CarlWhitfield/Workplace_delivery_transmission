@@ -989,7 +989,7 @@ end
 function update_sim_summary_delivery_wp!(summary::Dict, sim::Dict, i_day::Int,
         inf_pairs::Array{Int64,2}; CinfDrivers::Array{Array{Int64,1},1} =
         Array{Array{Int64,1},1}(undef,0))
-    update_sim_summary!(summary, sim, i_day)
+    update_sim_summary!(summary, sim, inf_pairs, i_day)
     inf, inf_scales = get_infectivities(sim, i_day)
     summary["CustomersInfected"][i_day] = length(CinfDrivers)
 end
