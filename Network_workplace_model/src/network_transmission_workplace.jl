@@ -91,10 +91,9 @@ Add a set of edges that fully connects a subset of nodes to the MetaGraph G
 
 function add_cohort_to_graph!(G::MetaGraphs.MetaGraph, team::Array{Int64,1}, w::Float64)
     for i in 1:length(team)
-        for j in (i+1):length(team)
-            add_edge!(G, team[i], team[j])
-            set_prop!(G, team[i], team[j], :weight, w)
-        end
+        jadd = (i+1):length(team)
+        add_edge!.(Ref(G), Ref(team[i]), team[jadd])
+        set_prop!.(Ref(G), Ref(team[i]), team[jadd], Ref(:weight), Ref(w))
     end  
 end
 
@@ -846,30 +845,30 @@ function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int)
     ipairs = Array{Int64,2}(undef,3,0)
     if length(inf) > 0
         nr = 1:sim["Ntot"]
-        nw = nr[sim["at_work"]]
+        #nw = nr[sim["at_work"]]
         #nw in work
-        j0 = sim["job"][nw]          #j0 is jobs of in work
+        #j0 = sim["job"][nw]          #j0 is jobs of in work
+        w_rand = return_infection_weight(1.0, t_F2F_random, false)
+        wl_room = return_infection_weight(4.0, t_lunch, false)
+        wo_room = return_infection_weight(4.0, t_office + t_lunch, false)
         for (k, i) in enumerate(inf)
             j = sim["job"][i]
-            p1 = sim["contact_prob_mat"][j,j0]
-            contacts = nw[rand(length(nw)) .<  p1]
-            w_rand = return_infection_weight(1.0, t_F2F_random, false)
-            add_to_random_contact_network!.(Ref(sim), Ref(i),
-                contacts, Ref(w_rand))
-            wl_room = return_infection_weight(4.0, t_lunch, false)
-            if j == 3
-                #this function should reject duplicate edges (unlike the others where repeats are allowed)
-                wo_room = return_infection_weight(4.0, t_office + t_lunch, false)
-                add_to_room_contact_network!.(Ref(sim), Ref(i), nw[j0 .== 3],
-                                              Ref(wo_room))
-                
-                add_to_room_contact_network!.(Ref(sim), Ref(i), nw[j0 .== 2],
-                    Ref(wl_room))
-            else
-                if j == 2
-                    add_to_room_contact_network!.(Ref(sim), Ref(i), nw[(j0 .== 2) .| (j0 .== 3)], Ref(wl_room))
+            contacts = Array{Int64,1}(undef,0)
+            for j0 in 1:3
+                p1 = sim["contact_prob_mat"][j,j0]
+                nwh = sim["job_sorted_nodes"][j0]
+                nwj0 = nwh[sim["at_work"][nwh]]
+                new_cs = randsubseq(nwj0,p1) 
+                contacts = push!(contacts,new_cs...)
+                if (j==2 && j0 == 2) || (j == 2 && j0 == 3) || (j == 3 && j0 == 2)
+                    add_to_room_contact_network!.(Ref(sim), Ref(i), nwj0, Ref(wl_room))
+                elseif (j == 3 && j0 == 3)
+                    add_to_room_contact_network!.(Ref(sim), Ref(i), nwj0, Ref(wo_room))
                 end
             end
+            #contacts = nw[rand(length(nw)) .<  p1]
+            
+            add_to_random_contact_network!.(Ref(sim), Ref(i), contacts, Ref(w_rand))
         end
     end
 end
@@ -907,26 +906,28 @@ function find_partner(pairs::Array{Int64,2}, p::Int64)
     return c
 end
 
-function add_edge_to_composite_network!(g::MetaGraphs.MetaGraph, snode::Int, dnode::Int, 
-                                        w::Float64, typ::Int)
+function add_edge_to_composite_network!(g::MetaGraphs.MetaGraph, snode::Int64, dnode::Int64, 
+                                        w::Float64, typ::Int64)
     if has_edge(g, snode, dnode)
         wvec = get_prop(g, snode, dnode, :weights)
         tvec = get_prop(g, snode, dnode, :types)
         push!(wvec, w)
         push!(tvec, typ)
-        set_prop!(g, snode, dnode, :weights, wvec)
-        set_prop!(g, snode, dnode, :types, tvec)
     else
+        wvec = fill(w,1)
+        tvec = fill(typ,1)
         add_edge!(g, snode, dnode)
-        set_prop!(g, snode, dnode, :weights, [w])
-        set_prop!(g, snode, dnode, :types, [typ])
     end
+    set_prop!(g, snode, dnode, :weights, wvec)
+    set_prop!(g, snode, dnode, :types, tvec)
 end
 
 function collate_networks(sim::Dict)
     composite_graph = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))
     #add edges from each graph, with vector of weights and types
-    
+    nr = 1:sim["Ntot"]
+    b_infected = get_infected_bool(sim)
+    inf = nr[b_infected]
     nets = ["cohort_network", "driver_pair_network", "loader_pair_network", "package_network", 
             "room_contact_network", "rand_contact_network", "house_share_network", "car_share_network"]
     work_only = [true, true, true, true, true, true, false, true]
@@ -935,11 +936,22 @@ function collate_networks(sim::Dict)
     
     for i in 1:length(nets)
         if haskey(sim, nets[i])
-           for e in edges(sim[nets[i]]) 
-                w = get_prop(sim[nets[i]], src(e), dst(e), :weight)
-                if !work_only[i] || (sim["at_work"][src(e)] && sim["at_work"][dst(e)])
-                    add_edge_to_composite_network!(composite_graph, src(e), dst(e), w, indices[i])
-                end
+            #for e in edges(sim[nets[i]])
+            #only add infectious node edges to save time
+            nbrs = neighbors.(Ref(sim[nets[i]]), inf)
+            #create array of infectious nodes for each contact edge
+            n_in = vcat(fill.(inf,length.(nbrs))...)
+            #flatten the other array to match
+            n_out = vcat(nbrs...)
+            w = get_prop.(Ref(sim[nets[i]]), n_in, n_out, Ref(:weight))
+            if work_only[i] 
+                b1 = sim["at_work"][n_in]
+                b2 = sim["at_work"][n_out]
+                bcond = b1 .* b2
+                add_edge_to_composite_network!.(Ref(composite_graph), n_in[bcond], n_out[bcond],
+                    w[bcond], Ref(indices[i]))
+            else
+                add_edge_to_composite_network!.(Ref(composite_graph), n_in, n_out, w, Ref(indices[i]))
             end
         end
     end

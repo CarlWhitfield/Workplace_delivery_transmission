@@ -8,7 +8,7 @@
 
 
 
-include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
+include("../../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
 using LightGraphs
 using MetaGraphs
@@ -102,8 +102,8 @@ function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psu
                 "susceptibility"=>ones(Float64,Ntot),
                 "VL_mag"=>zeros(Float64, Ntot),
                 "inf_mag"=>zeros(Float64, Ntot),
-                "infection_profiles"=>Array{Array{Float64,1},1}(undef,0),
-                "VL_profiles"=>Array{Array{Float64,1},1}(undef,0),
+                "infection_profiles"=>Array{Array{Float64,1},1}(undef,Ntot),
+                "VL_profiles"=>Array{Array{Float64,1},1}(undef,Ntot),
                 "at_work"=>zeros(Bool, Ntot),
                 "infection_status"=>zeros(Int8,Ntot),
                 "days_infectious" => zeros(Int64,Ntot),
@@ -116,8 +116,8 @@ function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psu
         sim["job"][nrh] .= i   #assign job/role labels
         sim["job_sorted_nodes"][i] = nrh
         #null initialise these
-        push!.(Ref(sim["infection_profiles"]), fill(zeros(0),n))
-        push!.(Ref(sim["VL_profiles"]), fill(zeros(0),n))
+        sim["infection_profiles"][nrh] .= fill(zeros(0),n)
+        sim["VL_profiles"][nrh] .= fill(zeros(0),n)
         istart += n
     end
 
