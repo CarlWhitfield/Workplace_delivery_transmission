@@ -1,4 +1,3 @@
-include("network_transmission_workplace.jl")
 include("dataframe_write.jl")
 
 NweeksDefault = 52
@@ -7,7 +6,7 @@ NweeksDefault = 52
 BasicParcelParams = Dict("ND"=>38, "NL"=>20, "NO"=>10, "NDteams"=>3, "NLteams"=>2, "NOteams"=>2,
                  "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0, "p_contact"=>(2.0/(38 + 20 + 10)),
                  "tD"=>0.05,"phi"=>0.1, "InfInit"=>0, "SimType"=>Outbreak_sim,
-                 "TeamTimes"=>[0.25,1.0,1.0], "TeamsOutside"=>[true,true,false], 
+                 "TeamTimes"=>[0.25,1.0,1.0], "TeamsOutside"=>[true,true,false],
                  "TeamDistances"=>[2.0,2.0,2.0], "HouseShareFactor"=>0.5, "CarShareFactor"=>0.5)
 ParcelOccPattern = 0.95 .* [0.90,1.0,1.0,0.99,0.91,0.55,0.0]
 ParcelPkgPattern = [0.74,1.0,0.95,0.92,0.84,0.31,0.0]
@@ -53,7 +52,7 @@ function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
          print(i,'\n')
          @threads for n in 1:Nrepeats
             index_start = i_ind_start + (n-1)*4
-            out = run_sim_delivery_wp(Params, OccPerDay, NPPerDay; 
+            out = run_sim_delivery_wp(Params, OccPerDay, NPPerDay;
                 PkgParams=PkgParams[i], PairParams=PairParams[i],
                 TestParams=TestingParams[i], Incidence=Incidence,
                 Prevalence=Prevalence)
@@ -70,7 +69,7 @@ function run_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     OccPattern = repeat(ParcelOccPattern,NweeksDefault)
     PkgPattern = repeat(ParcelPkgPattern,NweeksDefault)
     NPvec = Int64.(round.(NPparcel*PkgPattern))
-    
+
     II = [1,2,3]
     Phis = 0.1:0.1:1.0
     NDteams = [2,5,10,3,3,3,3,3,3]
@@ -78,7 +77,7 @@ function run_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     NOteams = [2,2,2,2,2,2,1,3,6]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
-    
+
     for it in 1:length(NDteams)
         for ii in II
             for phi in Phis
@@ -116,7 +115,7 @@ function run_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
                     PP = copy(BasicBulkParams)
                     PP["phi"] = phi
                     PP["InfInit"] = ii
-                    PairPs = Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true, 
+                    PairPs = Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
                                   "fixed_driver_pairs"=>fix,"fixed_loader_pairs"=>fix,
                                   "is_window_open"=>wo)
                     push!(ParamVec, PP)
@@ -192,7 +191,7 @@ function run_testing_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     OccPattern = repeat(ParcelOccPattern,NweeksDefault)
     PkgPattern = repeat(ParcelPkgPattern,NweeksDefault)
     NPvec = Int64.(round.(NPparcel*PkgPattern))
-    
+
     NCP = [0.0,0.5,1.0]
     Tperiod = 2:2:14
     Delay = [0,0,1,2]
@@ -255,7 +254,7 @@ function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     for j in 1:3
         for tp in Tperiod
             for i in 1:length(TestType)
-                
+
                 push!(ParamVec, PP)
                 push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
                       "protocol"=>TestType[i], "specificity"=>SpecDefault,
@@ -293,7 +292,7 @@ function run_testing_sweep_fixedprev_scenario_parcel(Prev_val::Float64, Nrepeats
     OccPattern = repeat(ParcelOccPattern,Nweeks)
     PkgPattern = repeat(ParcelPkgPattern,Nweeks)
     NPvec = Int64.(round.(NPparcel*PkgPattern))
-    
+
     NCP = [0.0,0.5,1.0]
     Tperiod = 2:2:14
     Delay = [0,0,1,2]
@@ -302,7 +301,7 @@ function run_testing_sweep_fixedprev_scenario_parcel(Prev_val::Float64, Nrepeats
 
     Prev = Prev_val*ones(NWeeks*7)
     Inc = Prev_val*ones(NWeeks*7)/7
-    
+
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
     PP = copy(BasicParcelParams)
@@ -356,7 +355,7 @@ function run_testing_sweep_fixedprev_scenario_pairs(Prev_val::Float64, Nrepeats:
 
     Prev = Prev_val*ones(NWeeks*7)
     Inc = Prev_val*ones(NWeeks*7)/7
-    
+
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
@@ -422,17 +421,17 @@ function run_param_sweep_outbreak_fomite_parcel(Nrepeats::Int = 10000)
             end
         end
         if i == 1
-            df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams, 
+            df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
                   NPPerDay = NPvec, TestingParams=TestParamVec, output = false)
         else
-            dfh = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams, 
+            dfh = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
                   NPPerDay = NPvec, TestingParams=TestParamVec, output = false)
             df = vcat(df,dfh)
         end
-       
+
     end
     CSV.write("fomite_param_sweep_parcel.csv", df)
-    
+
     return df
 end
 
@@ -462,22 +461,22 @@ function run_param_sweep_outbreak_fomite_pairs(Nrepeats::Int = 10000)
             end
         end
         if i == 1
-            df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams, 
-                  PairParams = PairParams, NPPerDay = NPvec, TestingParams=TestParamVec, 
+            df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
+                  PairParams = PairParams, NPPerDay = NPvec, TestingParams=TestParamVec,
                   output = false)
         else
-            dfh = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams, 
-                  PairParams = PairParams, NPPerDay = NPvec, TestingParams=TestParamVec, 
+            dfh = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
+                  PairParams = PairParams, NPPerDay = NPvec, TestingParams=TestParamVec,
                   output = false)
             df = vcat(df,dfh)
         end
-       
+
     end
     CSV.write("fomite_param_sweep_pairs.csv", df)
-    
+
     return df
 end
-  
+
 
 # function run_testing_fixedprev_wpsize_sens_parcel(Prev_val::Float64, Nrepeats::Int = 10000)
 #     NWeeks= 26
@@ -567,7 +566,7 @@ end
 # function run_testing_fixedprev_wpsize_sens_pairs(Prev_val::Float64, Nrepeats::Int = 10000)
 #     NWeeks= 26
 
-    
+
 #     Prev = Prev_val*ones(NWeeks*7)
 #     Inc = Prev_val*ones(NWeeks*7)/7
 #     RandContacts = 2.0
@@ -730,10 +729,10 @@ end
 #     NWeeks = Int64(ceil(length(Prev)/7))
 #     NPh = 300
 
-    
+
 #     OccPattern = OccPattern[1:length(Prev)]
 
-    
+
 #     NDh = Int64(2*round(NPh/30))
 #     NLh = Int64(2*round(NPh/40))
 #     NOh = Int64(round(NPh/40))
@@ -1071,7 +1070,7 @@ end
 #     OccPattern = OccPattern[1:length(Prev)]
 #     PkgPattern = PkgPattern[1:length(Prev)]
 #     NPvec = Int64.(round.(NPh*PkgPattern))
-    
+
 
 #     NDh = Int64(2*round(NPh/30))
 #     NLh = Int64(2*round(NPh/40))
