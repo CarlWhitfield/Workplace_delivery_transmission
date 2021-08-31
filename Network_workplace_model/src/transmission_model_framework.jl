@@ -7,8 +7,9 @@
 
 
 
+include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
-include("../../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
+#include("../../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
 using LightGraphs
 using MetaGraphs
