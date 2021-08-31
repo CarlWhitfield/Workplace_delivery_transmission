@@ -7,9 +7,8 @@
 
 
 
-include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
-#include("../../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
+include("../../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
 using LightGraphs
 using MetaGraphs
@@ -625,7 +624,7 @@ function sim_setup!(sim::Dict, InfInit::Int64, i_day::Int64, Ndays::Int64)
     for j in 1:sim["Njobs"]
         sim_summary["Susceptible"][j, 1:(i_day-1)] .= sim["N"][j]
     end
-    update_sim_summary!(sim_summary, sim, i_day)
+    update_sim_summary!(sim_summary, sim, Array{Int64,2}(undef,0), i_day)
     return sim_summary
 end
 
@@ -640,7 +639,7 @@ function scenario_sim_setup!(sim::Dict, inc::Array{Float64,1}, prev::Array{Float
     for j in 1:sim["Njobs"]
         sim_summary["Susceptible"][j, 1:(i_day-1)] .= sim["N"][j]
     end
-    update_sim_summary!(sim_summary, sim, i_day)
+    update_sim_summary!(sim_summary, sim, Array{Int64,2}(undef,0), i_day)
     return sim_summary
 end
 
