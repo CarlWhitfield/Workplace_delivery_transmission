@@ -120,8 +120,9 @@ function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psu
         sim["VL_profiles"][nrh] .= fill(zeros(0),n)
         istart += n
     end
-
+    nr = 1:Ntot
     sim["would_isolate"][generate_isolations(sim["Ntot"], Pisol)] .= true   #generate propensity to isolate
+    sim["non_isolators"] = nr[(sim["would_isolate"] .== false)]
     sim["susceptibility"][randsubseq(1:sim["Ntot"], 1.0 - Psusc)] .= 0.0    #generate non-susceptibles
 
     return sim
@@ -418,7 +419,7 @@ end
 
 """
 function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
-          isolation_network::MetaGraphs.MetaGraph)
+          isolation_network::LightGraphs.Graph)
 
     #do testing if test day
     if i_day == sim["test_days"][sim["test_day_counter"]]
@@ -464,41 +465,45 @@ end
 
 """
 function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_params::Dict, i_day::Int,
-                               isolation_network::MetaGraphs.MetaGraph)
+                               isolation_network::LightGraphs.Graph)
     will_isolate = detected[(sim["will_isolate_with_test"][detected])]
     isol_day = Int64.(round.(i_day + testing_params["delay"] .+ rand([0,0.5],length(will_isolate))))
     bool_update_isol_time = Bool.(((sim["isolation_time"][will_isolate] .== 0) .+
                                    (sim["isolation_time"][will_isolate] .> isol_day)))
     to_update = will_isolate[bool_update_isol_time]
-    sim["isolation_time"][to_update] .= isol_day[bool_update_isol_time]
+    
+    if length(will_isolate) > 0
+        if length(to_update) > 0
+            sim["isolation_time"][to_update] .= isol_day[bool_update_isol_time]
 
-    bool_true_test = Bool.(sim["infection_status"][to_update] .== Susc .+
-                           sim["infection_status"][to_update] .== Recd)
-    sim["isolating_due_to_true_test"][bool_true_test] .= true
-    sim["isolating_due_to_false_test"][.!bool_true_test] .= true
+            bool_false_test = (sim["infection_status"][to_update] .== Susc) .|
+                             (sim["infection_status"][to_update] .== Recd)
+            sim["isolating_due_to_true_test"][to_update[.!bool_false_test]] .= true
+            sim["isolating_due_to_false_test"][to_update[bool_false_test]] .= true
+        end
 
-    #locate contacts for those who will isolate
-    nbrs = neighbors.(Ref(isolation_network), will_isolate)
-    srcs = vcat(fill.(will_isolate, length.(nbrs))...)
-    dests = vcat(nbrs...)
+        #locate contacts for those who will isolate
+        nbrs = neighbors.(Ref(isolation_network), will_isolate)
+        srcs = vcat(fill.(will_isolate, length.(nbrs))...)
+        dests = vcat(nbrs...)
 
-    for (i,ip) in enumerate(dests)
-        #all partners of people who report do isolate
-        #if not isolating or contact's isolation time is before theirs
-        if sim["isolation_time"][ip] == 0 || sim["isolation_time"][ip] > sim["isolation_time"][srcs[i]]
-            sim["isolation_time"][ip] = sim["isolation_time"][srcs[i]]
-            if sim["isolating_due_to_true_test"][srcs[i]]
-                sim["isolating_due_to_contact_true_test"][ip] = true
-            elseif sim["isolating_due_to_false_test"][srcs[i]]
-                sim["isolating_due_to_contact_false_test"][ip] = true
+        for (i,ip) in enumerate(dests)
+            #all partners of people who report do isolate
+            #if not isolating or contact's isolation time is before theirs
+            if sim["isolation_time"][ip] == 0 || sim["isolation_time"][ip] > sim["isolation_time"][srcs[i]]
+                sim["isolation_time"][ip] = sim["isolation_time"][srcs[i]]
+                if sim["isolating_due_to_true_test"][srcs[i]]
+                    sim["isolating_due_to_contact_true_test"][ip] = true
+                elseif sim["isolating_due_to_false_test"][srcs[i]]
+                    sim["isolating_due_to_contact_false_test"][ip] = true
+                end
             end
         end
+        will_isolate = unique(vcat(will_isolate, dests))
+        
+        sim["testing_paused"][will_isolate] .= true
+        sim["resume_testing"][will_isolate] .= i_day + testing_params["test_pause"]
     end
-    will_isolate = unique(vcat(will_isolate, dests))
-
-    sim["testing_paused"][will_isolate] .= true
-    sim["resume_testing"][will_isolate] .= i_day + testing_params["test_pause"]
-
     return will_isolate
 end
 
@@ -726,7 +731,7 @@ function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict,
         if (TestParams["protocol"] == PCR_mass_protocol
          || TestParams["protocol"] == LFD_mass_protocol)
              sim["test_days"], sim["test_day_counter"] =
-                     init_testing!(sim, TestParams, i_day, length(OccPerDay), false)
+                     init_testing!(sim, TestParams, i_day, length(OccPerDay); fill_pos_profiles=false)
         end  #add options for other protocols here
     else
         sim["test_day_counter"] = 1
