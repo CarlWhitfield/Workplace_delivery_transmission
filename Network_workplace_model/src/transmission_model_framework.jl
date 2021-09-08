@@ -27,7 +27,9 @@ const Symp = 2
 const Recd = 3
 
 #Infection rates
-const infection_rate_F2F = 0.06   #infectivity of F2F interactions per hour = microCOVID approx
+const infection_rate_F2F = 0.076   
+#infectivity of F2F interactions per hour = microCOVID approx (0.06), 
+#with pop average of exponential over time, this goes to ~0.076
 const outside_factor = 0.2
 const mask_factor_infector = 0.25
 const mask_factor_infectee = 0.5
