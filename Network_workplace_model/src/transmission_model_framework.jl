@@ -7,8 +7,8 @@
 
 
 
-
-include("../../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
+include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
+#include("../../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
 using LightGraphs
 using MetaGraphs
@@ -27,26 +27,29 @@ const Symp = 2
 const Recd = 3
 
 #Infection rates
-const infection_rate_F2F = 0.076   
-#infectivity of F2F interactions per hour = microCOVID approx (0.06), 
-#with pop average of exponential over time, this goes to ~0.076
+const infection_rate_F2F = 0.07   #infectivity of F2F interactions per hour = microCOVID approx
 const outside_factor = 0.2
+const no_talking_factor = 0.2
 const mask_factor_infector = 0.25
 const mask_factor_infectee = 0.5
 const distance_factor_per_m = 0.5
 
 function return_infection_weight(distance::Float64, duration::Float64,
-                                 outdoor::Bool)
-    w = infection_rate_F2F * duration * (distance_factor_per_m^distance)
+                                 outdoor::Bool, talking::Bool)
+    w = infection_rate_F2F * duration * (distance_factor_per_m^(distance-1.0))
     if outdoor
         w = w * outside_factor
     end
+    if talking == false
+        w = w * no_talking_factor
+    end
+
     return w
 end
 
 function convert_weight_to_prob(weight::Float64, inf::Float64,
                      susc::Float64; mask_infector::Bool = false,
-                     mask_infectee::Bool = true)
+                     mask_infectee::Bool = false)
     beta = weight*inf*susc
     if mask_infector
         beta *= mask_factor_infector
@@ -473,7 +476,7 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
     bool_update_isol_time = Bool.(((sim["isolation_time"][will_isolate] .== 0) .+
                                    (sim["isolation_time"][will_isolate] .> isol_day)))
     to_update = will_isolate[bool_update_isol_time]
-    
+
     if length(will_isolate) > 0
         if length(to_update) > 0
             sim["isolation_time"][to_update] .= isol_day[bool_update_isol_time]
@@ -502,7 +505,7 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
             end
         end
         will_isolate = unique(vcat(will_isolate, dests))
-        
+
         sim["testing_paused"][will_isolate] .= true
         sim["resume_testing"][will_isolate] .= i_day + testing_params["test_pause"]
     end
@@ -626,7 +629,7 @@ function sim_setup!(sim::Dict, InfInit::Int64, i_day::Int64, Ndays::Int64)
     for j in 1:sim["Njobs"]
         sim_summary["Susceptible"][j, 1:(i_day-1)] .= sim["N"][j]
     end
-    update_sim_summary!(sim_summary, sim, Array{Int64,2}(undef,0), i_day)
+    update_sim_summary!(sim_summary, sim, Array{Int64,2}(undef,3,0), i_day)
     return sim_summary
 end
 
@@ -641,7 +644,7 @@ function scenario_sim_setup!(sim::Dict, inc::Array{Float64,1}, prev::Array{Float
     for j in 1:sim["Njobs"]
         sim_summary["Susceptible"][j, 1:(i_day-1)] .= sim["N"][j]
     end
-    update_sim_summary!(sim_summary, sim, Array{Int64,2}(undef,0), i_day)
+    update_sim_summary!(sim_summary, sim, Array{Int64,2}(undef,3,0), i_day)
     return sim_summary
 end
 
@@ -689,7 +692,7 @@ function update_sim_summary!(summary::Dict, sim::Dict, inf_pairs::Array{Int64,2}
         summary["Presenting"][j,i_day] = sum(jt .* after_onset_bool .* at_work_bool)
         summary["Asymptomatic"][j,i_day] = sum(jt .* after_onset_bool .* sim["asymptomatic"])
     end
-    
+
     for k in 1:length(inf_pairs[1,:])
         j = sim["job"][inf_pairs[2,k]]  #job of infectee
         summary["InfsByType"][inf_pairs[3,k]][j,i_day] += 1

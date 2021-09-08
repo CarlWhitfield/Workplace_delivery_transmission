@@ -44,10 +44,17 @@ const edge_colours = [colorant"red", colorant"red", colorant"green", colorant"or
 #const shift_pattern = 7     #days to draw shifts -- to be included
 
 #Contact duration parameters
-const t_F2F = 1.0          #Total duration of F2F contacts
 const t_F2F_random = 1.0/6.0
-const t_office = 7.0
-const t_lunch = 0.75
+const t_lunch = 0.5
+const t_office = 6.0
+const t_car_share = 0.5
+const hh_infection_rate_pd = 0.07
+
+const BreathRate = 0.5
+const ACH = 2.0
+const room_size = 100
+#a rough estimate of converting shared room interation with F2F interaction
+const room_sep = 1 - log(25*(BreathRate^2/(ACH*room_size + BreathRate)))/log(2)
 
 #const t_breaks = 1/24       #Time in break/lunch areas (1 hr)
 #around 10 hrs per day: 85 deliveries per day,
@@ -94,21 +101,21 @@ function add_cohort_to_graph!(G::MetaGraphs.MetaGraph, team::Array{Int64,1}, w::
         jadd = (i+1):length(team)
         add_edge!.(Ref(G), Ref(team[i]), team[jadd])
         set_prop!.(Ref(G), Ref(team[i]), team[jadd], Ref(:weight), Ref(w))
-    end  
+    end
 end
 
 
 function get_team_edge_weight(team::Array{Int64,1}, modifiers::Dict)
     #assume contacts are one-to-one, total time is preserved
     edge_weight = return_infection_weight(modifiers["distance"],
-       modifiers["rel_time"] * t_F2F / (length(team) - 1),
-        modifiers["outside"])
-    
+       modifiers["rel_time"] / (length(team) - 1),
+        modifiers["outside"], true)
+
     return edge_weight
 end
 
 #split drivers into teams who all have pre-shift meeting with one office person? Or one warehouse person?
-#If pairs delivery, pairs are assigned within teams. 
+#If pairs delivery, pairs are assigned within teams.
 #Could do same with warehouse people and office people.
 #NPteams, NOteams
 #Regular network is just team interactions
@@ -137,47 +144,50 @@ function generate_cohort_graph!(sim::Dict, Nteams::Array{Int64,1}, TeamF2FTime::
     Nstart = 0
     Ntstart = 0
     for j in 1:length(sim["N"])
-        team_assign[j] = rand(1:Nteams[j], sim["N"][j])
-        nr = Nstart .+ collect(1:sim["N"][j])
-        
-        #sort out fixed pairings, if they exist
-        if haskey(sim,"fixed_job_pairings")
-            fj_pairs_bool = (sim["fixed_job_pairings"][1,:] .> Nstart) .* 
-                   (sim["fixed_job_pairings"][1,:] .<= Nstart + sim["N"][j])
-            fj_pairs = sim["fixed_job_pairings"][:,fj_pairs_bool]
-            if length(fj_pairs) > 0  #fixed job pairings exist
-                for k in 1:size(fj_pairs,2) #make sure pairs go in the same cohort
-                    pair_teams = zeros(Int64,2)
-                    for m in 1:2    #get team no.s for each pair
-                        pair_teams[m] = team_assign[j][fj_pairs[m,k] - Nstart]
-                    end
-                    team_no = rand(pair_teams)   #pick one at random
-                    for m in 1:2    #assign to both
-                        team_assign[j][fj_pairs[m,k] - Nstart] = team_no
-                    end
+        if sim["N"][j] > 0
+            team_assign[j] = rand(1:Nteams[j], sim["N"][j])
+            nr = Nstart .+ collect(1:sim["N"][j])
 
+            #sort out fixed pairings, if they exist
+            if haskey(sim,"fixed_job_pairings")
+                fj_pairs_bool = (sim["fixed_job_pairings"][1,:] .> Nstart) .*
+                       (sim["fixed_job_pairings"][1,:] .<= Nstart + sim["N"][j])
+                fj_pairs = sim["fixed_job_pairings"][:,fj_pairs_bool]
+                if length(fj_pairs) > 0  #fixed job pairings exist
+                    for k in 1:size(fj_pairs,2) #make sure pairs go in the same cohort
+                        pair_teams = zeros(Int64,2)
+                        for m in 1:2    #get team no.s for each pair
+                            pair_teams[m] = team_assign[j][fj_pairs[m,k] - Nstart]
+                        end
+                        team_no = rand(pair_teams)   #pick one at random
+                        for m in 1:2    #assign to both
+                            team_assign[j][fj_pairs[m,k] - Nstart] = team_no
+                        end
+
+                    end
                 end
             end
-        end
-        
-        #assign teams
-        for n in 1:Nteams[j]      
-            teams[Ntstart + n] = nr[team_assign[j] .== n]   #each team has a new entry
-        end 
-        
-        #assign a member of warehouse staff to each driver team
-        if j == 1
-            nw = sim["N"][j] .+ collect(1:sim["N"][j+1])
-            nwm = sample(nw,Nteams[j],replace=false) 
+
+            #assign teams
             for n in 1:Nteams[j]
-                append!(teams[n],nwm[n])
+                teams[Ntstart + n] = nr[team_assign[j] .== n]   #each team has a new entry
             end
+
+            #assign a member of warehouse staff to each driver team
+            if j == 1
+                nw = sim["N"][j] .+ collect(1:sim["N"][j+1])
+                nwm = sample(nw,Nteams[j],replace=false)
+                for n in 1:Nteams[j]
+                    append!(teams[n],nwm[n])
+                end
+            end
+        else
+            Nteams[j] = 0
         end
-        
         Nstart += sim["N"][j]
         Ntstart += Nteams[j]
     end
-    
+
     graph = LightGraphs.SimpleGraph(sim["Ntot"])
     team_graph = MetaGraphs.MetaGraph(graph)
     Ntstart = 0
@@ -185,11 +195,14 @@ function generate_cohort_graph!(sim::Dict, Nteams::Array{Int64,1}, TeamF2FTime::
         for n in 1:Nteams[j]
             w = get_team_edge_weight(teams[Ntstart+n], Dict("outside"=>outside[j],
                            "distance"=>distance[j],"rel_time"=>TeamF2FTime[j]))
+            if j == 3
+                w += return_infection_weight(room_sep, t_office, false, false)
+            end
             add_cohort_to_graph!(team_graph, teams[Ntstart+n], w)
         end
         Ntstart += Nteams[j]
     end
-    
+
     sim["cohort_network"] = team_graph
 end
 
@@ -200,17 +213,18 @@ end
 function generate_car_share_and_house_share_graphs!(sim::Dict, HomeParams::Dict)
     sim["car_share_network"] = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))
     sim["house_share_network"] = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))
-    w_house_share = 0.0
-    w_car_share = 0.0
-    
+    w_house_share = hh_infection_rate_pd
+    w_car_share = return_infection_weight(1.0, t_car_share, false, false)
+
     nr = collect(1:sim["Ntot"])
     nr_rand = shuffle(nr)
-    pph = ones(sim["Ntot"])
+    pph = ones(Int64,sim["Ntot"])  #if no house share one person per house
     cumul_pph = cumsum(pph)
     #HomeParams["HouseShareFactor"]   #1 - mean number of employees per house
     if (HomeParams["HouseShareFactor"] > 0)
         Nhouses = Int64(ceil(sim["Ntot"]/(1 + HomeParams["HouseShareFactor"])))
         pph = 1 .+ rand(Multinomial(sim["Ntot"] - Nhouses, ones(Nhouses)./Nhouses))
+        #otherwise, the extra Ntot - Nhouses people are multinomially distributed
         cumul_pph = cumsum(pph)
         for h in 1:Nhouses
             if (pph[h] > 1)
@@ -220,26 +234,26 @@ function generate_car_share_and_house_share_graphs!(sim::Dict, HomeParams::Dict)
                     iph = 1:cumul_pph[h]
                 end
                 add_cohort_to_graph!(sim["house_share_network"], nr_rand[iph], w_house_share)
-            end 
+            end
         end
     end
-    
+
     #fill vector of hhs
     hhs = Array{Array{Int64,1},1}(undef,0)
     for h in 1:length(pph)
         if(h>1)
             iph = (cumul_pph[h-1] + 1):cumul_pph[h]
-        else 
+        else
             iph = 1:cumul_pph[h]
         end
         push!(hhs, nr_rand[iph])
     end
-    
+
     #HomeParams["CarShareFactor"]   #no. of houses / no. of cars (assume all house shares share vehicle)
     NH = length(pph)
     nh = collect(1:NH)
     nh_rand = shuffle(nh)
-    hpc = ones(NH)
+    hpc = ones(Int64, NH)
     cumul_hpc = cumsum(hpc)
     cars = Array{Array{Int64,1},1}(undef,0)
     if (HomeParams["CarShareFactor"] > 0)
@@ -260,10 +274,10 @@ function generate_car_share_and_house_share_graphs!(sim::Dict, HomeParams::Dict)
             push!(cars, car_share)
             if length(car_share) > 1
                 add_cohort_to_graph!(sim["car_share_network"], car_share, w_car_share)
-            end 
+            end
         end
     end
-    
+
     return hhs, cars
 end
 
@@ -307,9 +321,9 @@ function init(Params::Dict, Inc::Array{Float64,1},
     if HSparams["HouseShareFactor"] > 0 || HSparams["CarShareFactor"] > 0
         generate_car_share_and_house_share_graphs!(sim, HSparams)
     end
-    
+
     apply_contact_mixing_params!(sim, Params)
-    
+
     return sim
 end
 
@@ -350,9 +364,9 @@ function initialise(Params::Dict, PairParams::Dict, Incidence::Array{Float64,1},
         generate_cohort_graph!(sim, Nteams, Params["TeamTimes"],
                                Params["TeamsOutside"], Params["TeamDistances"])
     end
-    
+
     sim["NTypes"] = Ninftypes
-    
+
     return sim
 end
 
@@ -360,11 +374,11 @@ end
 
 """
 function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dict)
-    
+
     at_work = zeros(Bool,sim["Ntot"])
     NAs = zeros(Int64,sim["Ntot"])
-    
-    
+
+
     if PairParams["is_driver_pairs"]
         at_work_drivers, NAdrivers = get_pair_assignments!(sim, occ, Ncons, PairParams, 1)
     else
@@ -372,8 +386,8 @@ function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dic
     end
     at_work[at_work_drivers] .= true
     NAs[at_work_drivers] .= NAdrivers
-    
-    
+
+
     if PairParams["is_loader_pairs"]
         at_work_loaders, NAloaders = get_pair_assignments!(sim, occ, Ncons, PairParams, 2)
     else
@@ -381,13 +395,13 @@ function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dic
     end
     at_work[at_work_loaders] .= true
     NAs[at_work_loaders] .= NAloaders
-    
-    
+
+
     at_work_office, NAoffice = get_individual_assignments!(sim, occ, Ncons, 3)
     at_work[at_work_office] .= true
     NAs[at_work_office] .= NAoffice
 
-    
+
     return at_work, NAs
 end
 
@@ -398,7 +412,7 @@ function get_individual_assignments!(sim::Dict, occ::Float64, Ncons::Int64, job:
     #without pairs
     in_job = sim["job_sorted_nodes"][job]
     Nj = length(in_job)
-    
+
     available = in_job[sim["isolation_status"][in_job] .== false]
     if length(available)/Nj > occ
         w = sample(in_job, round(Int,occ*Nj), replace=false)
@@ -469,12 +483,12 @@ function select_pairs!(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64, N
     else
         pair_cons = Array{Int64,1}(undef,0)
     end
-    
+
     simple_pair_graph = MetaGraphs.MetaGraph(LightGraphs.SimpleGraph(sim["Ntot"]))
     NPfinal = size(pairs,2)
     pairs_out = Array{Array{Int64,1},1}(undef,NPfinal)
     for j in 1:size(pairs,2)
-       add_edge!(simple_pair_graph, pairs[1,j], pairs[2,j]) 
+       add_edge!(simple_pair_graph, pairs[1,j], pairs[2,j])
        pairs_out[j] = pairs[:,j]
     end
     if job == 1
@@ -482,7 +496,7 @@ function select_pairs!(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64, N
     elseif job == 2
         sim["loader_pair_network"] = simple_pair_graph
     end
-    
+
     return pairs_out, pair_cons
 end
 
@@ -493,28 +507,29 @@ end
 function get_pair_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dict, job::Int)
     pairs = Array{Int64,2}(undef,2,0)
     NPassignments = Array{Int64,1}(undef,0)
-    
+
     if job == 1
         pairs, NPassignments = select_pairs!(sim, occ, PairParams["fixed_driver_pairs"], job, Ncons)
-        
+
         #component for delivery time
-        exp_per_assign = return_infection_weight(1.0, 
+        exp_per_assign = return_infection_weight(1.0,
             sim["contact_times"]["t_handling"] + sim["contact_times"]["t_doorstep"],
-            true)
-        
+            true, false)
+
         #add component for cabin time
-        exp_per_assign += return_infection_weight(1.0, sim["contact_times"]["t_cabin"], PairParams["is_window_open"])
+        exp_per_assign += return_infection_weight(1.0, sim["contact_times"]["t_cabin"],
+                     PairParams["is_window_open"], false)
         add_cohort_to_graph!.(Ref(sim["driver_pair_network"]), pairs, NPassignments .* exp_per_assign)
     end
-    
+
     if job == 2
         pairs, NPassignments = select_pairs!(sim, occ, PairParams["fixed_loader_pairs"], job, Ncons)
-        exp_per_assign = return_infection_weight(1.0, 
-            sim["contact_times"]["t_picking"], true)
+        exp_per_assign = return_infection_weight(1.0,
+            sim["contact_times"]["t_picking"], true, false)
         add_cohort_to_graph!.(Ref(sim["loader_pair_network"]), pairs, NPassignments .* exp_per_assign)
     end
-    
-    
+
+
     return vcat(pairs...), vec(vcat(transpose(NPassignments),
             transpose(NPassignments)))
 end
@@ -561,7 +576,7 @@ function get_in_work(sim::Dict, occ::Float64, Ncons::Int64,
         end
         at_work[w] .= true
     end
-    
+
     return at_work, NAs
 end
 
@@ -597,7 +612,7 @@ end
 #send list of packages that could be infected to this function
 #with a list of source and destination nodes for each
 #may contain repeats
-function add_package_contacts_to_network!(sim::Dict, source::Int64, 
+function add_package_contacts_to_network!(sim::Dict, source::Int64,
                                   dest::Int64, weight::Float64)
     if has_edge(sim["package_network"],source,dest)
         w = get_prop(sim["package_network"], source, dest, :weight)
@@ -609,7 +624,7 @@ function add_package_contacts_to_network!(sim::Dict, source::Int64,
 end
 
 #repeats not accepted for these contacts
-function add_to_random_contact_network!(sim::Dict, source::Int64, 
+function add_to_random_contact_network!(sim::Dict, source::Int64,
                                dest::Int64, weight::Float64)
     if has_edge(sim["rand_contact_network"],source,dest) == false
         add_edge!(sim["rand_contact_network"], source, dest)
@@ -617,7 +632,7 @@ function add_to_random_contact_network!(sim::Dict, source::Int64,
     end
 end
 
-function add_to_room_contact_network!(sim::Dict, source::Int64, 
+function add_to_room_contact_network!(sim::Dict, source::Int64,
                                dest::Int64, weight::Float64)
     if has_edge(sim["room_contact_network"],source,dest) == false
         add_edge!(sim["room_contact_network"], source, dest)
@@ -628,11 +643,11 @@ end
 function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
         AllDrivers::Array{Array{Int64,1},1}, InfDrivers::Array{Int64,1},
         InfDriverPos::Array{Int64,1}, DriverInfs::Array{Float64,1},
-        AllLoaders::Array{Array{Int64,1},1}, InfLoaders::Array{Int64,1}, 
+        AllLoaders::Array{Array{Int64,1},1}, InfLoaders::Array{Int64,1},
         InfLoaderPos::Array{Int64,1}, LoaderInfs::Array{Float64,1},
         PkgParams::Dict, NADrivers::Array{Int64,1}, NALoaders::Array{Int64,1},
         modifiers::Dict)
-    
+
     #assume package order is clustered, not random
     LAorder = cumsum(NALoaders)
     DAorder = cumsum(NADrivers)
@@ -649,18 +664,18 @@ function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
 #     DriverTeamAtDropoff = vcat(fill.(collect(1:length(NADrivers)), NADrivers)...)
     AllLoadersAtPickup = vcat(fill.(AllLoaders, NALoaders)...)
     AllDriversAtDropoff = vcat(fill.(AllDrivers, NADrivers)...)
-    
+
     #generate packages infected by loaders
     if PkgParams["p_fomite_trans"] > 0
         if length(InfLoaders) > 0
-            #InfLoaders contains infectious loaders 
-            #InfLoaderPos contains their position in AllLoaders which is an array of arrays 
+            #InfLoaders contains infectious loaders
+            #InfLoaderPos contains their position in AllLoaders which is an array of arrays
             #NALoaders is the number of items assigned to each working group in AllLoaders
             for i in 1:length(InfLoaders)
                 iLpkgs = NALoaders[InfLoaderPos[i]]
                 PkgNos = collect(1:iLpkgs)
                 if InfLoaderPos[i] > 1
-                    PkgNos .= LAorder[InfLoaderPos[i]-1] .+ PkgNos 
+                    PkgNos .= LAorder[InfLoaderPos[i]-1] .+ PkgNos
                 end
                 LoadTimes[PkgNos] = PkgParams["Ltime"] .* rand(iLpkgs)  #generate time infected
                 Lth = LoadTimes[PkgNos]
@@ -697,21 +712,21 @@ function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
 
     #potential package infections by drivers here
     if length(InfDrivers) > 0
-        #InfDrivers contains infectious drivers 
-        #InfDriverPos contains their position in AllDrivers which is an array of arrays 
+        #InfDrivers contains infectious drivers
+        #InfDriverPos contains their position in AllDrivers which is an array of arrays
         #NADrivers is the number of items assigned to each working group in AllDrivers
-        out_weight = return_infection_weight(1.0, 
-                    sim["contact_times"]["t_doorstep"],true)
-        in_weight = return_infection_weight(1.0, 
-                    sim["contact_times"]["t_doorstep"],false)
+        out_weight = return_infection_weight(1.0,
+                    sim["contact_times"]["t_doorstep"],true, true)
+        in_weight = return_infection_weight(1.0,
+                    sim["contact_times"]["t_doorstep"],false, true)
         doorstep_weight = modifiers["outdoor_contact_frac"] * out_weight
          + (1-modifiers["outdoor_contact_frac"]) * in_weight
-        
+
         for i in 1:length(InfDrivers)       #loop over all drivers to find infectees
             iDpkgs = NADrivers[InfDriverPos[i]]     #number of packages handled by driver
             PkgNos = collect(1:iDpkgs)
             if InfDriverPos[i] > 1
-                PkgNos .= DAorder[InfDriverPos[i]-1] .+ PkgNos 
+                PkgNos .= DAorder[InfDriverPos[i]-1] .+ PkgNos
             end
             if PkgParams["p_fomite_trans"] > 0
                 sth = PkgParams["Ltime"] .+ rand(Exponential(PkgParams["PkgHlife"]/log(2)), iDpkgs)
@@ -719,11 +734,11 @@ function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
                 DropTimes[PkgNos[dt_required]] = PkgParams["Ltime"] .+ rand(sum(dt_required)) .* PkgParams["Dtime"]
                 dth = DropTimes[PkgNos]
                 #could be infected at time of dropoff (only infects customers, not other drivers)
-                InfProbAtDropoff[PkgNos] .= InfProbAtDropoff[PkgNos] .+ 
+                InfProbAtDropoff[PkgNos] .= InfProbAtDropoff[PkgNos] .+
                                             (DriverInfs[i] * PkgParams["p_fomite_trans"])
                 #could be infected at pickup and remain infected
                 Iadcond = (sth .> dth)
-                InfProbAtDropoff[PkgNos[Iadcond]] .= InfProbAtDropoff[PkgNos[Iadcond]] .+ 
+                InfProbAtDropoff[PkgNos[Iadcond]] .= InfProbAtDropoff[PkgNos[Iadcond]] .+
                                             (DriverInfs[i] * PkgParams["p_fomite_trans"])
 
                 for d in AllDrivers[InfDriverPos[i]]
@@ -732,45 +747,45 @@ function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
                         push!(IDDriverDropoff, d)
                     end
                     #add infections due to driver interaction
-                    InfProbAtDropoff[PkgNos] .= InfProbAtDropoff[PkgNos] .+ 
+                    InfProbAtDropoff[PkgNos] .= InfProbAtDropoff[PkgNos] .+
                                                (DriverInfs[i] * doorstep_weight)
                 end
             end
         end
     end
-    
+
     add_package_contacts_to_network!.(Ref(sim), InfectorAtPickup,
                IDDriverPickup, Ref(PkgParams["p_fomite_trans"]))
     add_package_contacts_to_network!.(Ref(sim), InfectorAtDropoff,
                IDDriverDropoff, Ref(PkgParams["p_fomite_trans"]))
-    
+
     #returns vectors of possibly infected customers, and prob of transmission for each
     #convert to probability
-    
+
     InfProbAtDropoff = 1.0 .- exp.(-InfProbAtDropoff)
-    
+
     return InfProbAtDropoff[InfProbAtDropoff .> 0], AllDriversAtDropoff[InfProbAtDropoff .> 0]
 end
 
 function get_package_and_customer_infections!(sim::Dict, NP::Int64,
            i_day::Int, PkgParams::Dict, PairParams::Dict,
            NAs::Array{Int64,1}, CustModifiers::Dict)
-    
+
     CustInfProb = Array{Float64,1}(undef,0)
     DriverDelivering = Array{Array{Int64,1},1}(undef,0)
     if NP > 0
         inf, inf_scales = get_infectivities(sim, i_day)
         d_in_work = sim["job_sorted_nodes"][1][sim["at_work"][sim["job_sorted_nodes"][1]]]
         l_in_work = sim["job_sorted_nodes"][2][sim["at_work"][sim["job_sorted_nodes"][2]]]
-        
+
         inf_drivers = inf[(sim["job"][inf] .== 1)]
         dinfs = inf_scales[(sim["job"][inf] .== 1)]
         inf_loaders = inf[(sim["job"][inf] .== 2)]
         linfs = inf_scales[(sim["job"][inf] .== 2)]
-        
+
         infd_pos = zeros(Int64,length(inf_drivers))
         infl_pos = zeros(Int64,length(inf_loaders))
-        
+
         NDPs = ne(sim["driver_pair_network"])
         if NDPs > 0
             alld = Array{Array{Int64,1},1}(undef,NDPs)
@@ -828,13 +843,13 @@ function get_package_and_customer_infections!(sim::Dict, NP::Int64,
             end
             NAL = NAs[l_in_work]
         end
-        
-        
-        CustInfProb, DriverDelivering = 
+
+
+        CustInfProb, DriverDelivering =
         generate_infected_packages_and_customers!(sim, NP, alld, inf_drivers,
             infd_pos, dinfs, alll, inf_loaders, infl_pos, linfs, PkgParams, NAD, NAL, CustModifiers)
     end
-    
+
     return CustInfProb, DriverDelivering
 end
 
@@ -843,14 +858,14 @@ function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int)
     #for those who are infectious and in work, generate contacts randomly with others
     #in work
     ipairs = Array{Int64,2}(undef,3,0)
+    x_rand = mean(Params["TeamDistances"]) #random contacts are av of team distances
     if length(inf) > 0
         nr = 1:sim["Ntot"]
         #nw = nr[sim["at_work"]]
         #nw in work
         #j0 = sim["job"][nw]          #j0 is jobs of in work
-        w_rand = return_infection_weight(1.0, t_F2F_random, false)
-        wl_room = return_infection_weight(4.0, t_lunch, false)
-        wo_room = return_infection_weight(4.0, t_office + t_lunch, false)
+        w_rand = return_infection_weight(x_rand, t_F2F_random, false, true)
+        wl_room = return_infection_weight(room_sep, t_lunch, false, false)
         for (k, i) in enumerate(inf)
             j = sim["job"][i]
             contacts = Array{Int64,1}(undef,0)
@@ -858,16 +873,14 @@ function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int)
                 p1 = sim["contact_prob_mat"][j,j0]
                 nwh = sim["job_sorted_nodes"][j0]
                 nwj0 = nwh[sim["at_work"][nwh]]
-                new_cs = randsubseq(nwj0,p1) 
+                new_cs = randsubseq(nwj0,p1)
                 contacts = push!(contacts,new_cs...)
-                if (j==2 && j0 == 2) || (j == 2 && j0 == 3) || (j == 3 && j0 == 2)
+                if (j==2 || j==3) && (j0 == 2 || j0 == 3)
                     add_to_room_contact_network!.(Ref(sim), Ref(i), nwj0, Ref(wl_room))
-                elseif (j == 3 && j0 == 3)
-                    add_to_room_contact_network!.(Ref(sim), Ref(i), nwj0, Ref(wo_room))
                 end
             end
             #contacts = nw[rand(length(nw)) .<  p1]
-            
+
             add_to_random_contact_network!.(Ref(sim), Ref(i), contacts, Ref(w_rand))
         end
     end
@@ -876,21 +889,21 @@ end
 function get_customer_introductions(sim::Dict, i_day::Int,
                   NAssignments::Array{Int64,1}, modifiers::Dict)
     pinf = zeros(Float64, sim["N"][1])
-    
-    out_weight = return_infection_weight(1.0, 
+
+    out_weight = return_infection_weight(1.0,
                     sim["contact_times"]["t_doorstep"],true)
-    in_weight = return_infection_weight(1.0, 
+    in_weight = return_infection_weight(1.0,
                     sim["contact_times"]["t_doorstep"],true)
-    
+
     ppd = modifiers["outdoor_contact_frac"] * out_weight
          + (1-modifiers["outdoor_contact_frac"]) * in_weight
-    
+
     nds = sim["job_sorted_nodes"][1]
     pinf = convert_weight_to_prob.(sim["Prevalence"][i_day] * ppd * NAssignments[nds],
                  Ref(1.0), sim["susceptibility"][nds])
-    
+
     intros = nds[rand(sim["N"][1]) .< pinf]
-    
+
     return intros
 end
 
@@ -906,7 +919,7 @@ function find_partner(pairs::Array{Int64,2}, p::Int64)
     return c
 end
 
-function add_edge_to_composite_network!(g::MetaGraphs.MetaGraph, snode::Int64, dnode::Int64, 
+function add_edge_to_composite_network!(g::MetaGraphs.MetaGraph, snode::Int64, dnode::Int64,
                                         w::Float64, typ::Int64)
     if has_edge(g, snode, dnode)
         wvec = get_prop(g, snode, dnode, :weights)
@@ -928,12 +941,12 @@ function collate_networks(sim::Dict)
     nr = 1:sim["Ntot"]
     b_infected = get_infected_bool(sim)
     inf = nr[b_infected]
-    nets = ["cohort_network", "driver_pair_network", "loader_pair_network", "package_network", 
+    nets = ["cohort_network", "driver_pair_network", "loader_pair_network", "package_network",
             "room_contact_network", "rand_contact_network", "house_share_network", "car_share_network"]
     work_only = [true, true, true, true, true, true, false, true]
     indices = [network_contact, pair_contact, pair_contact, package_contact, room_transmission,
                non_network_contact, house_share, car_share]
-    
+
     for i in 1:length(nets)
         if haskey(sim, nets[i])
             #for e in edges(sim[nets[i]])
@@ -944,7 +957,7 @@ function collate_networks(sim::Dict)
             #flatten the other array to match
             n_out = vcat(nbrs...)
             w = get_prop.(Ref(sim[nets[i]]), n_in, n_out, Ref(:weight))
-            if work_only[i] 
+            if work_only[i]
                 b1 = sim["at_work"][n_in]
                 b2 = sim["at_work"][n_out]
                 bcond = b1 .* b2
@@ -955,7 +968,7 @@ function collate_networks(sim::Dict)
             end
         end
     end
-    
+
     return composite_graph
 end
 
@@ -968,12 +981,12 @@ function create_isolation_network!(sim::Dict, IsolParams::Dict)
             for e in edges(sim[net_name])
                 add_edge!(sim["isolation_network"], src(e),dst(e))
             end
-        end  
+        end
     end
-    
-    if IsolParams["fixed_pair_isolation"]
+
+    if IsolParams["pair_isolation"]
         for i in 1:size(sim["fixed_job_pairings"],2)
-            add_edge!(sim["isolation_network"], sim["fixed_job_pairings"][1,i], 
+            add_edge!(sim["isolation_network"], sim["fixed_job_pairings"][1,i],
                       sim["fixed_job_pairings"][2,i])
         end
     end
@@ -982,10 +995,10 @@ end
 function setup_delivery_wp_model!(sim::Dict, Params::Dict, TestParams::Dict, OccPerDay::Array{Float64,1})
     summary, i_day, Anyinf = setup_transmission_model!(sim, Params, TestParams, OccPerDay)
     summary["CustomersInfected"] = zeros(Int64,length(OccPerDay))
-    
+
     return summary, i_day, Anyinf
 end
-    
+
 function update_sim_summary_delivery_wp!(summary::Dict, sim::Dict, i_day::Int,
         inf_pairs::Array{Int64,2}; CinfDrivers::Array{Array{Int64,1},1} =
         Array{Array{Int64,1},1}(undef,0))
@@ -995,57 +1008,57 @@ function update_sim_summary_delivery_wp!(summary::Dict, sim::Dict, i_day::Int,
 end
 
 function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Float64, Ncons::Int64, Params::Dict, PkgParams::Dict, PairParams::Dict, TestParams::Dict, cust_modifiers::Dict)
-    
+
     reset_daily_contact_networks!(sim)
-    
+
     #do_testing
     if TestParams["is_testing"]
         new_isolators = do_testing!(sim, TestParams, i_day, sim["isolation_network"])
     end
-    
+
     #update infectivity and isolation status
     update_all_statuses!(sim, i_day)
-    
+
     #update_in_work
     at_work, NAssignments = get_assignments!(sim, Occ, Ncons, PairParams)
     update_in_work!(sim, at_work)
-    
+
     infpairs = Array{Int64,2}(undef,3,0)
-    
+
     #introductions
     intro_pairs = get_introductions(sim, i_day)
     intros = get_customer_introductions(sim, i_day, NAssignments, cust_modifiers)
     intro_pairs = hcat(intro_pairs,
-        [-transpose(ones(Int64,length(intros))); transpose(intros); 
+        [-transpose(ones(Int64,length(intros))); transpose(intros);
         transpose(customer_contact*ones(Int64,length(intros)))])
-    
+
     #get all contacts
     generate_random_contact_networks!(sim, Params, i_day)
-    
+
     #customer infections
     CustInfProb, DriverDelivering = get_package_and_customer_infections!(sim, Ncons, i_day, PkgParams, PairParams, NAssignments, cust_modifiers)
     bool_infd = (rand(length(CustInfProb)) .< CustInfProb)
     CinfDs = DriverDelivering[bool_infd]
-    
+
     g = collate_networks(sim)
     update_contact_network!(sim, g)
     infpairs = get_network_infections(sim, i_day)
-    
+
     all_infpairs = hcat(intro_pairs, infpairs)
-    
+
     infpairs_final = do_infections_randomly!(all_infpairs, sim, i_day)
     update_sim_summary_delivery_wp!(sim_summary, sim, i_day,
         infpairs_final; CinfDrivers=CinfDs)
-    
+
     return infpairs_final
 end
 
 #run a either single outbreak with 1 initial case, or a sim with no cases but introductions
-function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay::Array{Int64,1}; 
+function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay::Array{Int64,1};
         PkgParams::Dict=DefaultPkgParams, PairParams::Dict=DefaultPairParams,
         TestParams::Dict=DefaultTestParams, Incidence::Array{Float64,1} = zeros(length(OccPerDay)),
         Prevalence::Array{Float64,1} = zeros(length(OccPerDay)))
-    
+
     #if empty args are given, revert to default
     if length(PkgParams) == 0
         PkgParams = DefaultPkgParams
@@ -1056,12 +1069,12 @@ function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay
     if length(TestParams) == 0
         TestParams = DefaultTestParams
     end
-    
+
     sim = initialise(Params, PairParams, Incidence, Prevalence)
     sim_summary, i_day, Go = setup_delivery_wp_model!(sim, Params, TestParams, OccPerDay)
     #defaults
-    
-    IsolParams = Dict("fixed_pair_isolation"=>false, "cohort_isolation"=>false, 
+
+    IsolParams = Dict("pair_isolation"=>false, "cohort_isolation"=>false,
                       "car_share_isolation"=>false, "house_share_isolation"=>false)
     for key in IsolParams
         if haskey(Params,key)
@@ -1072,32 +1085,32 @@ function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay
         end
     end
     create_isolation_network!(sim, IsolParams)
-    
+
     CustModifiers = Dict("outdoor_contact_frac"=>1.0, "sanitise_frequency"=>0.0, "mask_prob"=>0.0)
     #edit these based on params
-    
-    
+
+
     while Go && (i_day <= length(OccPerDay))
         infpairs = sim_loop_delivery_wp!(sim, sim_summary, i_day,
             OccPerDay[i_day], NPPerDay[i_day], Params, PkgParams,
             PairParams, TestParams, CustModifiers)
-        
-        
-        
-        
+
+
+
+
 #         fname = Printf.@sprintf("infection_network_%03d.png",i_day)
 #         if visualise
 #             print_infection_network(sim, fname, infpairs, node_x, node_y, pairs)
 #         end
-    
+
 #         if testing && (i_day == test_days[test_day_counter])
 #             test_day_counter += 1
 #         end
-        
+
         if Params["SimType"] == Outbreak_sim
             Go = any(get_infected_bool(sim))
         end
-        
+
         i_day += 1
     end
     trim_sim_summary!(sim_summary, i_day-1, length(OccPerDay))
