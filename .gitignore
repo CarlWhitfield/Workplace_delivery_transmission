@@ -6,22 +6,13 @@
 *.pyc
 *.mp4
 Company Data Analysis/
+.ipynb_checkpoints/
 Network_workplace_model/.ipynb_checkpoints/
 Network_workplace_model/*/.ipynb_checkpoints/
+Network_workplace_model/src/alt_parameters/.ipynb_checkpoints/
+Testing models/.ipynb_checkpoints/
 Network_workplace_model/Testing_params/
 *.pdf
 *.svg
 Network_workplace_model/Latest_results/data_compression.ipynb
-.ipynb_checkpoints/prev_inc-checkpoint.ipynb
-Network_workplace_model/src/alt_parameters/.ipynb_checkpoints/network_transmission_workplace_contact1-checkpoint.jl
-Network_workplace_model/src/alt_parameters/.ipynb_checkpoints/network_transmission_workplace_contact2-checkpoint.jl
-Network_workplace_model/src/alt_parameters/.ipynb_checkpoints/param_sweeps_sig1-checkpoint.jl
-Network_workplace_model/src/alt_parameters/.ipynb_checkpoints/param_sweeps_sig2-checkpoint.jl
-Testing models/.ipynb_checkpoints/Hellewell_comp-checkpoint.ipynb
-Testing models/.ipynb_checkpoints/Hellewell_ignore_sonset-checkpoint.ipynb
-Testing models/.ipynb_checkpoints/Hellewell_redo-checkpoint.ipynb
-Testing models/.ipynb_checkpoints/Hellewell_simple_comp1-checkpoint.ipynb
-Testing models/.ipynb_checkpoints/Model derivations-checkpoint.ipynb
-Testing models/.ipynb_checkpoints/Scenarios-checkpoint.ipynb
-Testing models/.ipynb_checkpoints/step_function_case-checkpoint.ipynb
-Testing models/.ipynb_checkpoints/time_dependent_case-checkpoint.ipynb
+*.pptx
