@@ -4,11 +4,12 @@ include("dataframe_write.jl")
 NweeksDefault = 52
 
 #check and update
-BasicParcelParams = Dict("ND"=>38, "NL"=>20, "NO"=>10, "NDteams"=>3, "NLteams"=>2, "NOteams"=>1,
-                 "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0, "p_contact"=>(2.0/(38 + 20 + 10)),
-                 "tD"=>0.05,"phi"=>0.1, "InfInit"=>0, "SimType"=>Outbreak_sim,
-                 "TeamTimes"=>[0.25,1.0,1.0], "TeamsOutside"=>[true,true,false],
-                 "TeamDistances"=>[1.0,1.0,1.0], "HouseShareFactor"=>0.5, "CarShareFactor"=>0.5)
+BasicParcelParams = Dict("ND"=>38, "NL"=>20, "NO"=>10, "NDteams"=>3, "NLteams"=>2,
+        "NOteams"=>1, "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0,
+        "p_contact"=>(2.0/(38 + 20 + 10)), "tD"=>0.05,"phi"=>0.1, "InfInit"=>0,
+        "SimType"=>Outbreak_sim, "TeamTimes"=>[0.25,1.0,1.0],
+        "TeamsOutside"=>[true,true,false], "TeamDistances"=>[1.0,1.0,1.0],
+         "HouseShareFactor"=>0.5, "CarShareFactor"=>0.5, "BreakContactProb"=>0.25)
 ParcelOccPattern = 0.95 .* [0.90,1.0,1.0,0.99,0.91,0.55,0.0]
 ParcelPkgPattern = [0.74,1.0,0.95,0.92,0.84,0.31,0.0]
 ParcelPkgPattern = (6/7)*ParcelPkgPattern/mean(ParcelPkgPattern)
@@ -25,10 +26,11 @@ BasicBulkParams = Dict("ND"=>20, "NL"=>16, "NO"=>8, "NDteams"=>2, "NLteams"=>2, 
                  "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0, "p_contact"=>(2.0/(20+16+8)),
                  "tD"=>0.1,"phi"=>0.1,  "InfInit"=>0, "SimType"=>Outbreak_sim,
                  "TeamTimes"=>[0.25,1.0,1.0], "TeamsOutside"=>[true,true,false],
-                 "TeamDistances"=>[1.0,1.0,1.0], "HouseShareFactor"=>0.5, "CarShareFactor"=>0.5)
+                 "TeamDistances"=>[1.0,1.0,1.0], "HouseShareFactor"=>0.5,
+                 "CarShareFactor"=>0.5, "BreakContactProb"=>0.25)
 BasicPairParams = Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
                   "fixed_driver_pairs"=>true, "fixed_loader_pairs"=>true,
-                  "is_window_open"=>false, "pair_isolation"=>true)
+                  "is_window_open"=>false, "PairIsolation"=>true)
 BulkOccPattern = 0.95 .* [0.82, 0.98, 0.97, 0.99, 1.0, 0.84, 0.47]
 BulkPkgPattern = [0.80, 0.94, 0.95, 0.94,  1.0, 0.81, 0.44]
 BulkPkgPattern = BulkPkgPattern/mean(BulkPkgPattern)
@@ -158,7 +160,7 @@ function run_presenteeism_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
                     PP["Pisol"] = pi
                     PP["InfInit"] = ii
                     PP["TeamDistances"] = [cd,cd,cd]
-                    PP["cohort_isolation"] = ci
+                    PP["CohortIsolation"] = ci
                     push!(ParamVec, PP)
                 end
             end
@@ -191,7 +193,7 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
                     PP["Pisol"] = pi
                     PP["InfInit"] = ii
                     PP["TeamDistances"] = [cd,cd,cd]
-                    PP["cohort_isolation"] = ci
+                    PP["CohortIsolation"] = ci
                     push!(ParamVec, PP)
                     push!(PairParams, PairPs)
                 end
@@ -221,8 +223,8 @@ function run_car_house_share_sweep_parcel(Nrepeats::Int = 10000)
                     PP = copy(BasicParcelParams)
                     PP["CarShareFactor"] = csf
                     PP["HouseShareFactor"] = hsf
-                    PP["car_share_isolation"] = csisol
-                    PP["house_share_isolation"] = hsisol
+                    PP["CarShareIsolation"] = csisol
+                    PP["HouseShareIsolation"] = hsisol
                     push!(ParamVec,PP)
                 end
             end
@@ -254,8 +256,8 @@ function run_car_house_share_sweep_pairs(Nrepeats::Int = 10000)
                     PP = copy(BasicBulkParams)
                     PP["CarShareFactor"] = csf
                     PP["HouseShareFactor"] = hsf
-                    PP["car_share_isolation"] = csisol
-                    PP["house_share_isolation"] = hsisol
+                    PP["CarShareIsolation"] = csisol
+                    PP["HouseShareIsolation"] = hsisol
                     push!(ParamVec,PP)
                     push!(PairParams, PairPs)
                 end
@@ -583,9 +585,9 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
             PP["NOteams"] = 0
         end
         PP["TeamDistances"] = fill(TeamDistance[i],3)
-        PP["house_share_isolation"] = HouseShareIsolation[i]
-        PP["car_share_isolation"] = CarShareIsolation[i]
-        PP["cohort_isolation"] = CohortIsolation[i]
+        PP["HouseShareIsolation"] = HouseShareIsolation[i]
+        PP["CarShareIsolation"] = CarShareIsolation[i]
+        PP["CohortIsolation"] = CohortIsolation[i]
         TP["is_testing"] = Testing[i]
         push!(ParamVec, PP)
         push!(TestParamVec, TP)
@@ -627,10 +629,10 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
             PP["NOteams"] = 0
         end
         PP["TeamDistances"] = fill(TeamDistance[i],3)
-        PairPs["pair_isolation"] = PairIsolation[i]
-        PP["house_share_isolation"] = HouseShareIsolation[i]
-        PP["car_share_isolation"] = CarShareIsolation[i]
-        PP["cohort_isolation"] = CohortIsolation[i]
+        PairPs["PairIsolation"] = PairIsolation[i]
+        PP["HouseShareIsolation"] = HouseShareIsolation[i]
+        PP["CarShareIsolation"] = CarShareIsolation[i]
+        PP["CohortIsolation"] = CohortIsolation[i]
         TP["is_testing"] = Testing[i]
         push!(ParamVec, PP)
         push!(TestParamVec, TP)

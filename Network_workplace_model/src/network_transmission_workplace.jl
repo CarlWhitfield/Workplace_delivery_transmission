@@ -318,9 +318,8 @@ function init(Params::Dict, Inc::Array{Float64,1},
     if haskey(Params, "CarShareFactor")
         HSparams["CarShareFactor"] = Params["CarShareFactor"]
     end
-    if HSparams["HouseShareFactor"] > 0 || HSparams["CarShareFactor"] > 0
-        generate_car_share_and_house_share_graphs!(sim, HSparams)
-    end
+
+    generate_car_share_and_house_share_graphs!(sim, HSparams)
 
     apply_contact_mixing_params!(sim, Params)
 
@@ -764,7 +763,11 @@ function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
 
     InfProbAtDropoff = 1.0 .- exp.(-InfProbAtDropoff)
 
-    return InfProbAtDropoff[InfProbAtDropoff .> 0], AllDriversAtDropoff[InfProbAtDropoff .> 0]
+    NonZeroProb = (InfProbAtDropoff .> 0)
+    IPADNonZero = InfProbAtDropoff[NonZeroProb]
+    ADADNonZero = AllDriversAtDropoff[NonZeroProb]
+
+    return IPADNonZero, ADADNonZero
 end
 
 function get_package_and_customer_infections!(sim::Dict, NP::Int64,
@@ -843,11 +846,13 @@ function get_package_and_customer_infections!(sim::Dict, NP::Int64,
             end
             NAL = NAs[l_in_work]
         end
-
-
-        CustInfProb, DriverDelivering =
-        generate_infected_packages_and_customers!(sim, NP, alld, inf_drivers,
-            infd_pos, dinfs, alll, inf_loaders, infl_pos, linfs, PkgParams, NAD, NAL, CustModifiers)
+        
+        #deliveries only occur if there are staff
+        if length(alld) > 0 && length(alll) > 0
+            CustInfProb, DriverDelivering =
+            generate_infected_packages_and_customers!(sim, NP, alld, inf_drivers,
+                infd_pos, dinfs, alll, inf_loaders, infl_pos, linfs, PkgParams, NAD, NAL, CustModifiers)
+        end
     end
 
     return CustInfProb, DriverDelivering
@@ -876,7 +881,7 @@ function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int)
                 new_cs = randsubseq(nwj0,p1)
                 contacts = push!(contacts,new_cs...)
                 if (j==2 || j==3) && (j0 == 2 || j0 == 3)
-                    room_cs = randsubseq(nwj0,sim["break_contact_prob"])  
+                    room_cs = randsubseq(nwj0,Params["BreakContactProb"])
                     #not all workers share break room at same time
                     add_to_room_contact_network!.(Ref(sim), Ref(i), room_cs, Ref(wl_room))
                 end
@@ -985,7 +990,7 @@ function create_isolation_network!(sim::Dict, IsolParams::Dict)
             end
         end
     end
-    print(sim["isolation_network"],'\n')
+
     if IsolParams["PairIsolation"]
         for i in 1:size(sim["fixed_job_pairings"],2)
             add_edge!(sim["isolation_network"], sim["fixed_job_pairings"][1,i],
@@ -1086,7 +1091,6 @@ function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay
             IsolParams[key] = PairParams[key]
         end
     end
-    print(IsolParams,'\n')
     create_isolation_network!(sim, IsolParams)
 
     CustModifiers = Dict("outdoor_contact_frac"=>1.0, "sanitise_frequency"=>0.0, "mask_prob"=>0.0)
