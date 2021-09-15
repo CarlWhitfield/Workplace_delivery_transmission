@@ -137,10 +137,13 @@ function generate_symp_day_from_time(stime::Float64)
     return Int64(floor(rand(0:1) + stime))
 end
 
-function infect_node!(sim::Dict, i::Int, time::Int,
-                      contact_tracing_network::MetaGraphs.MetaGraph
-                       = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"])))
-
+function infect_node!(sim::Dict, i::Int, time::Int)
+    if haskey(sim,"isolation_network")
+        contact_tracing_network = sim["isolation_network"]
+    else
+        contact_tracing_network = SimpleGraph(sim["Ntot"])
+    end
+    
     sim["infection_status"][i] = Expd
     sim["susceptibility"][i] = 0.0
     sim["inf_time"][i] = time
@@ -166,17 +169,17 @@ function infect_node!(sim::Dict, i::Int, time::Int,
            sim["isolation_time"][i] == 0 #might already be isolating
                sim["isolation_time"][i] = time + sim["symp_day"][i]
         end
-        #       print("Symp isol: ", i, ' ', time, ' ', sim["isolation_time"][i], '\n')
+#         print("Symp isol: ", i, ' ', time, ' ', sim["isolation_time"][i], '\n')
         traced = neighbors(contact_tracing_network, i)
         if length(traced) > 0
-            to_update = ((sim["isolation_time"][traced] .>  (time + sim["symp_day"][i])) .+
-                        (sim["isolation_time"][traced] .== 0))
+            later_isol = (sim["isolation_time"][traced] .>  (time + sim["symp_day"][i]))
+            no_isol = (sim["isolation_time"][traced] .== 0)
+            to_update = no_isol .| later_isol
             #if not isolating already or isolating later than this
             if sum(to_update) > 0
                 sim["isolation_time"][traced[to_update]] .=  time + sim["symp_day"][i]
             end
         end
-
     end
 end
 
@@ -194,7 +197,7 @@ function infect_random!(sim::Dict, InfInit::Int, i_day::Int)
 #     if length(pairs) > 0   #for pair isolation
 #         partner = find_partner(pairs, inf)
 #     end
-    infect_node!(sim, inf, i_day)#, partner)
+    infect_node!(sim, inf, i_day)
 
     return inf
 end

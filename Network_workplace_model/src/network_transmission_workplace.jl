@@ -728,6 +728,9 @@ function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
             if InfDriverPos[i] > 1
                 PkgNos .= DAorder[InfDriverPos[i]-1] .+ PkgNos
             end
+            #contribution from F2F interaction
+            InfProbAtDropoff[PkgNos] .= InfProbAtDropoff[PkgNos] .+
+                                        (DriverInfs[i] * doorstep_weight)
             if PkgParams["p_fomite_trans"] > 0
                 sth = PkgParams["Ltime"] .+ rand(Exponential(PkgParams["PkgHlife"]/log(2)), iDpkgs)
                 dt_required = (DropTimes[PkgNos] .== 0) #check if dt needed
@@ -746,9 +749,6 @@ function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
                         push!(InfectorAtDropoff, InfDrivers[i])  #push back number infectious at pickup
                         push!(IDDriverDropoff, d)
                     end
-                    #add infections due to driver interaction
-                    InfProbAtDropoff[PkgNos] .= InfProbAtDropoff[PkgNos] .+
-                                               (DriverInfs[i] * doorstep_weight)
                 end
             end
         end
@@ -876,7 +876,9 @@ function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int)
                 new_cs = randsubseq(nwj0,p1)
                 contacts = push!(contacts,new_cs...)
                 if (j==2 || j==3) && (j0 == 2 || j0 == 3)
-                    add_to_room_contact_network!.(Ref(sim), Ref(i), nwj0, Ref(wl_room))
+                    room_cs = randsubseq(nwj0,sim["break_contact_prob"])  
+                    #not all workers share break room at same time
+                    add_to_room_contact_network!.(Ref(sim), Ref(i), room_cs, Ref(wl_room))
                 end
             end
             #contacts = nw[rand(length(nw)) .<  p1]
@@ -891,9 +893,9 @@ function get_customer_introductions(sim::Dict, i_day::Int,
     pinf = zeros(Float64, sim["N"][1])
 
     out_weight = return_infection_weight(1.0,
-                    sim["contact_times"]["t_doorstep"],true)
+                    sim["contact_times"]["t_doorstep"],true,true)
     in_weight = return_infection_weight(1.0,
-                    sim["contact_times"]["t_doorstep"],true)
+                    sim["contact_times"]["t_doorstep"],false,true)
 
     ppd = modifiers["outdoor_contact_frac"] * out_weight
          + (1-modifiers["outdoor_contact_frac"]) * in_weight
@@ -975,7 +977,7 @@ end
 function create_isolation_network!(sim::Dict, IsolParams::Dict)
     sim["isolation_network"] = SimpleGraph(sim["Ntot"])
     nets = ["cohort_network", "house_share_network", "car_share_network"]
-    keys = ["cohort_isolation", "house_share_isolation", "car_share_isolation"]
+    keys = ["CohortIsolation", "HouseShareIsolation", "CarShareIsolation"]
     for (i,net_name) in enumerate(nets)
         if IsolParams[keys[i]]
             for e in edges(sim[net_name])
@@ -983,8 +985,8 @@ function create_isolation_network!(sim::Dict, IsolParams::Dict)
             end
         end
     end
-
-    if IsolParams["pair_isolation"]
+    print(sim["isolation_network"],'\n')
+    if IsolParams["PairIsolation"]
         for i in 1:size(sim["fixed_job_pairings"],2)
             add_edge!(sim["isolation_network"], sim["fixed_job_pairings"][1,i],
                       sim["fixed_job_pairings"][2,i])
@@ -1074,9 +1076,9 @@ function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay
     sim_summary, i_day, Go = setup_delivery_wp_model!(sim, Params, TestParams, OccPerDay)
     #defaults
 
-    IsolParams = Dict("pair_isolation"=>false, "cohort_isolation"=>false,
-                      "car_share_isolation"=>false, "house_share_isolation"=>false)
-    for key in IsolParams
+    IsolParams = Dict("PairIsolation"=>false, "CohortIsolation"=>false,
+                      "CarShareIsolation"=>false, "HouseShareIsolation"=>false)
+    for key in keys(IsolParams)
         if haskey(Params,key)
             IsolParams[key] = Params[key]
         end
@@ -1084,6 +1086,7 @@ function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay
             IsolParams[key] = PairParams[key]
         end
     end
+    print(IsolParams,'\n')
     create_isolation_network!(sim, IsolParams)
 
     CustModifiers = Dict("outdoor_contact_frac"=>1.0, "sanitise_frequency"=>0.0, "mask_prob"=>0.0)
