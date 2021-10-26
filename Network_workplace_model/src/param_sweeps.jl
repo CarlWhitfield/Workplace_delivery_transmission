@@ -1,40 +1,38 @@
-include("network_transmission_workplace.jl")
 include("dataframe_write.jl")
 
 NweeksDefault = 52
 
 #check and update
-BasicParcelParams = Dict("ND"=>38, "NL"=>20, "NO"=>10, "NDteams"=>3, "NLteams"=>2,
+BasicParcelParams = Dict("ND"=>50, "NL"=>25, "NO"=>15, "NDteams"=>3, "NLteams"=>2,
         "NOteams"=>1, "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0,
-        "p_contact"=>(2.0/(38 + 20 + 10)), "tD"=>0.05,"phi"=>0.1, "InfInit"=>0,
+        "p_contact"=>(2.0/(38 + 20 + 10)), "tD"=>0.05,"phi"=>1.0, "InfInit"=>0,
         "SimType"=>Outbreak_sim, "TeamTimes"=>[0.25,1.0,1.0],
         "TeamsOutside"=>[true,true,false], "TeamDistances"=>[1.0,1.0,1.0],
-         "HouseShareFactor"=>0.5, "CarShareFactor"=>0.5, "BreakContactProb"=>0.25)
+         "HouseShareFactor"=>0.5, "CarShareFactor"=>0.5, "BreakContactProb"=>0.25,
+         "CohortChangeRate"=>(1.0/(38 + 20 + 10)))
 ParcelOccPattern = 0.95 .* [0.90,1.0,1.0,0.99,0.91,0.55,0.0]
-ParcelPkgPattern = [0.74,1.0,0.95,0.92,0.84,0.31,0.0]
-ParcelPkgPattern = (6/7)*ParcelPkgPattern/mean(ParcelPkgPattern)
+ParcelPkgPattern = [0.89,1.20,1.14,1.10,1.0,0.37,0.0]
 NPparcel = 3000
 
-SpecDefault = 0.99 #Specificity
+SpecDefault = 0.999 #Specificity
 BasicTestingParams = Dict("is_testing"=>true, "new_comply_prob"=>0.25,
              "tperiod"=>3, "protocol"=>LFD_mass_protocol,
              "specificity"=>SpecDefault, "delay"=>0.0,
              "test_pause"=>21.0)
-BasicPkgParams = Dict("p_fomite_trans"=>0.0, "Dtime"=>8, "Ltime"=>4, "PkgHlife"=>3)
+BasicPkgParams = Dict("p_fomite_trans"=>0.0001, "Dtime"=>8, "Ltime"=>4, "PkgHlife"=>3)
 
 BasicBulkParams = Dict("ND"=>20, "NL"=>16, "NO"=>8, "NDteams"=>2, "NLteams"=>2, "NOteams"=>1,
                  "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0, "p_contact"=>(2.0/(20+16+8)),
-                 "tD"=>0.1,"phi"=>0.1,  "InfInit"=>0, "SimType"=>Outbreak_sim,
+                 "tD"=>0.1,"phi"=>1.0,  "InfInit"=>0, "SimType"=>Outbreak_sim,
                  "TeamTimes"=>[0.25,1.0,1.0], "TeamsOutside"=>[true,true,false],
                  "TeamDistances"=>[1.0,1.0,1.0], "HouseShareFactor"=>0.5,
-                 "CarShareFactor"=>0.5, "BreakContactProb"=>0.25)
+                 "CarShareFactor"=>0.5, "BreakContactProb"=>0.25, "CohortChangeRate"=>(1.0/(20+16+8)))
 BasicPairParams = Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
                   "fixed_driver_pairs"=>true, "fixed_loader_pairs"=>true,
                   "is_window_open"=>false, "PairIsolation"=>true)
 BulkOccPattern = 0.95 .* [0.82, 0.98, 0.97, 0.99, 1.0, 0.84, 0.47]
 BulkPkgPattern = [0.80, 0.94, 0.95, 0.94,  1.0, 0.81, 0.44]
-BulkPkgPattern = BulkPkgPattern/mean(BulkPkgPattern)
-NPbulk = 300
+NPbulk = 210
 
 
 #Check this works
@@ -78,28 +76,31 @@ function run_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     NPvec = Int64.(round.(NPparcel*PkgPattern))
 
     II = [1,2,3]
-    TeamDistance = [1.0,1.5,2.0,3.0]
+    CR = [0, 0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 5.0] * BasicParcelParams["p_contact"]
     NDteams = [3,3,3,3,3,3,4,6,8]
     NLteams = [2,2,2,3,4,5,2,2,2]
     NOteams = [1,2,4,1,1,1,1,1,1]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
-
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgP = copy(BasicPkgParams)
     for it in 1:length(NDteams)
         for ii in II
-            for dist in TeamDistance
+            for cr in CR
                 PP = copy(BasicParcelParams)
                 PP["NDteams"] = NDteams[it]
                 PP["NLteams"] = NLteams[it]
                 PP["NOteams"] = NOteams[it]
-                PP["TeamDistances"] = [dist,dist,dist]
+                PP["CohortChangeRate"] = cr
                 PP["InfInit"] = ii
                 push!(ParamVec, PP)
+                push!(PkgVec, PkgP)
             end
         end
     end
 
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec, filename="param_sweep.csv")
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec, 
+                       PkgParams = PkgVec, filename="param_sweep.csv")
     return df
 end
 
@@ -116,7 +117,9 @@ function run_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     fp = [true, false]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
+    PkgP = copy(BasicPkgParams)
     for ii in II
         for it in 1:length(NDteams)
             for wo in iswo
@@ -131,15 +134,79 @@ function run_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
                                   "is_window_open"=>wo)
                     push!(ParamVec, PP)
                     push!(PairParams, PairPs)
+                    push!(PkgVec, PkgP)
                 end
             end
         end
     end
 
     df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec,
-                  filename="param_sweep_pairs.csv", PairParams = PairParams)
+                       PkgParams = PkgVec, filename="param_sweep_pairs.csv", 
+                       PairParams = PairParams)
     return df
 end
+
+function run_contact_sweeps_outbreak_parcel(Nrepeats::Int = 10000)
+    OccPattern = repeat(ParcelOccPattern,NweeksDefault)
+    PkgPattern = repeat(ParcelPkgPattern,NweeksDefault)
+    NPvec = Int64.(round.(NPparcel*PkgPattern))
+    PC = [0, 0.5, 1.0, 2.0, 5.0] * BasicParcelParams["p_contact"]
+    CR = [0, 0.1, 0.5, 1.0, 2.0, 5.0] * BasicParcelParams["p_contact"]
+    II = [1,2,3]
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgP = copy(BasicPkgParams)
+    for pc in PC
+        for ii in II
+            for cr in CR
+                PP = copy(BasicParcelParams)
+                PP["p_contact"] = pc
+                PP["CohortChangeRate"] = cr
+                PP["InfInit"] = ii
+                push!(ParamVec, PP)
+                push!(PkgVec, PkgP)
+            end
+        end
+    end
+
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgVec, 
+                             NPPerDay = NPvec, filename="contact_sweep.csv")
+    return df
+end
+
+function run_contacts_sweep_outbreak_pairs(Nrepeats::Int = 10000)
+    OccPattern = repeat(BulkOccPattern,NweeksDefault)
+    PkgPattern = repeat(BulkPkgPattern,NweeksDefault)
+    NPvec = Int64.(round.(NPbulk*PkgPattern))
+    #other params
+    II = [1,2,3]
+    PC = [0, 0.5, 1.0, 2.0, 5.0] * BasicBulkParams["p_contact"]
+    CR = [0, 0.1, 0.5, 1.0, 2.0, 5.0] * BasicBulkParams["p_contact"]
+
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PairParams = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgP = copy(BasicPkgParams)
+     for pc in PC
+        for ii in II
+            for cr in CR
+                PP = copy(BasicBulkParams)
+                PP["p_contact"] = pc
+                PP["CohortChangeRate"] = cr
+                PP["InfInit"] = ii
+                PairPs = copy(BasicPairParams)
+                push!(ParamVec, PP)
+                push!(PairParams, PairPs)
+                push!(PkgVec, PkgP)
+            end
+        end
+    end
+
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec, PkgParams = PkgVec,
+                  filename="contact_sweep_pairs.csv", PairParams = PairParams)
+    return df
+end
+
 
 function run_presenteeism_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     OccPattern = repeat(ParcelOccPattern,NweeksDefault)
@@ -152,6 +219,8 @@ function run_presenteeism_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     II = [1,2,3]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgP = copy(BasicPkgParams)
     for cd in CohortDistance
         for ii in II
             for pi in PIsol
@@ -162,12 +231,13 @@ function run_presenteeism_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
                     PP["TeamDistances"] = [cd,cd,cd]
                     PP["CohortIsolation"] = ci
                     push!(ParamVec, PP)
+                    push!(PkgVec, PkgP)
                 end
             end
         end
     end
 
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern;
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgVec,
                   NPPerDay = NPvec, filename="presenteeism_param_sweep.csv")
     return df
 end
@@ -184,7 +254,9 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PairPs = copy(BasicPairParams)
+    PkgP = copy(BasicPkgParams)
     for cd in CohortDistance
         for ii in II
             for pi in PIsol
@@ -196,11 +268,12 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
                     PP["CohortIsolation"] = ci
                     push!(ParamVec, PP)
                     push!(PairParams, PairPs)
+                    push!(PkgVec, PkgP)
                 end
             end
         end
     end
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec,
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec, PkgParams = PkgVec,
                   PairParams = PairParams, filename="presenteeism_param_sweep_pairs.csv")
     return df
 end
@@ -216,6 +289,8 @@ function run_car_house_share_sweep_parcel(Nrepeats::Int = 10000)
     HouseShareIsol = [true, false]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgP = copy(BasicPkgParams)
     for csf in CarShareF
         for hsf in HouseShareF
             for csisol in CarShareIsol
@@ -226,12 +301,13 @@ function run_car_house_share_sweep_parcel(Nrepeats::Int = 10000)
                     PP["CarShareIsolation"] = csisol
                     PP["HouseShareIsolation"] = hsisol
                     push!(ParamVec,PP)
+                    push!(PkgVec, PkgP)
                 end
             end
         end
     end
     df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec,
-                  filename="car_house_share_param_sweep_parcel.csv")
+               PkgParams = PkgVec, filename="car_house_share_param_sweep_parcel.csv")
     return df
 
 end
@@ -248,7 +324,9 @@ function run_car_house_share_sweep_pairs(Nrepeats::Int = 10000)
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PairPs = copy(BasicPairParams)
+    PkgP = copy(BasicPkgParams)
     for csf in CarShareF
         for hsf in HouseShareF
             for csisol in CarShareIsol
@@ -259,12 +337,13 @@ function run_car_house_share_sweep_pairs(Nrepeats::Int = 10000)
                     PP["CarShareIsolation"] = csisol
                     PP["HouseShareIsolation"] = hsisol
                     push!(ParamVec,PP)
-                    push!(PairParams, PairPs)
+                    push!(PairParams,PairPs)
+                    push!(PkgVec,PkgP)
                 end
             end
         end
     end
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec,
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec, PkgParams = PkgVec,
                   PairParams = PairParams, filename="car_house_share_param_sweep_pairs.csv")
     return df
 
@@ -283,11 +362,14 @@ function run_testing_sweep_outbreak_parcel(Nrepeats::Int = 10000)
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PP = copy(BasicParcelParams)
+    PkgP = copy(BasicPkgParams)
     for j in 1:3
         for tp in Tperiod
             for i in 1:length(TestType)
                 push!(ParamVec, PP)
+                push!(PkgVec, PkgP)
                 push!(TestParamVec, Dict("is_testing"=>true, "new_comply_prob"=>NCP[j], "tperiod"=>tp,
                       "protocol"=>TestType[i], "specificity"=>SpecDefault,
                       "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
@@ -296,19 +378,21 @@ function run_testing_sweep_outbreak_parcel(Nrepeats::Int = 10000)
         end
     end
 
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern;
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgVec,
                   NPPerDay = NPvec, TestingParams=TestParamVec, output = false)
 
     #run baseline case
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    push!(PkgVec, PkgP)
     push!(ParamVec, PP)
     df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern;  NPPerDay = NPvec,
-                  output = false)
+                  PkgParams = PkgVec, output = false)
 
     df2["is_testing"] = zeros(Bool,nrow(df2))
     df2["new_comply_prob"] = zeros(nrow(df2))
     df2["tperiod"] = zeros(nrow(df2))
-    df2["protocol"] = fill("No testing", nrow(df2))
+    df2["protocol"] = fill(0, nrow(df2))
     df2["specificity"] = 0.999 * ones(nrow(df2))
     df2["delay"] = zeros(nrow(df2))
     df2["test_pause"] = zeros(nrow(df2))
@@ -333,13 +417,15 @@ function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PP = copy(BasicBulkParams)
     PairPs = copy(BasicPairParams)
+    PkgP = copy(BasicPkgParams)
     for j in 1:3
         for tp in Tperiod
             for i in 1:length(TestType)
-
                 push!(ParamVec, PP)
+                push!(PkgVec, PkgP)
                 push!(TestParamVec, Dict("is_testing"=>true, "new_comply_prob"=>NCP[j],
                 "tperiod"=>tp, "protocol"=>TestType[i], "specificity"=>SpecDefault,
                       "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
@@ -348,20 +434,22 @@ function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
         end
     end
 
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern;  NPPerDay = NPvec,
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern;  NPPerDay = NPvec, PkgParams = PkgVec,
              TestingParams=TestParamVec,  PairParams = PairParams, output = false)
 
     #run baseline case
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    push!(PkgVec, PkgP)
     push!(ParamVec, PP)
     push!(PairParams, PairPs)
     df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern;  NPPerDay = NPvec,
-        PairParams = PairParams, output = false)
+                        PkgParams = PkgVec, PairParams = PairParams, output = false)
     df2["is_testing"] = zeros(Bool,nrow(df2))
     df2["new_comply_prob"] = zeros(nrow(df2))
     df2["tperiod"] = zeros(nrow(df2))
-    df2["protocol"] = fill("No testing", nrow(df2))
+    df2["protocol"] = fill(0, nrow(df2))
     df2["specificity"] = 0.999 * ones(nrow(df2))
     df2["delay"] = zeros(nrow(df2))
     df2["test_pause"] = zeros(nrow(df2))
@@ -388,12 +476,15 @@ function run_testing_sweep_fixedprev_scenario_parcel(Prev_val::Float64, Nrepeats
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PP = copy(BasicParcelParams)
+    PkgP = copy(BasicPkgParams)
     PP["SimType"] = Scenario_sim
     for j in 1:3
         for tp in Tperiod
             for i in 1:length(TestType)
                 push!(ParamVec, PP)
+                push!(PkgVec, PkgP)
                 push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
                       "protocol"=>TestType[i], "specificity"=>SpecDefault,
                       "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
@@ -404,13 +495,15 @@ function run_testing_sweep_fixedprev_scenario_parcel(Prev_val::Float64, Nrepeats
 
     df = run_many_sims(ParamVec, Nrepeats, OccPattern;
                   NPPerDay = NPvec, TestingParams=TestParamVec, output = false,
-                  Incidence = Inc, Prevalence = Prev)
+                  PkgParams = PkgVec, Incidence = Inc, Prevalence = Prev)
 
     #run baseline case
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    push!(PkgVec, PkgP)
     push!(ParamVec, PP)
     df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern;  NPPerDay = NPvec,
-                  output = false, Incidence = Inc, Prevalence = Prev)
+                  PkgParams = PkgVec, output = false, Incidence = Inc, Prevalence = Prev)
 
     df2["new_comply_prob"] = zeros(nrow(df2))
     df2["tperiod"] = zeros(nrow(df2))
@@ -443,13 +536,16 @@ function run_testing_sweep_fixedprev_scenario_pairs(Prev_val::Float64, Nrepeats:
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PP = copy(BasicBulkParams)
     PP["SimType"] = Scenario_sim
     PairPs = copy(BasicPairParams)
+    PkgP = copy(BasicPkgParams)
     for j in 1:3
         for tp in Tperiod
             for i in 1:length(TestType)
                 push!(ParamVec, PP)
+                push!(PkgVec, PkgP)
                 push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
                       "protocol"=>TestType[i], "specificity"=>SpecDefault,
                       "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
@@ -460,15 +556,18 @@ function run_testing_sweep_fixedprev_scenario_pairs(Prev_val::Float64, Nrepeats:
 
     df = run_many_sims(ParamVec, Nrepeats, OccPattern;  NPPerDay = NPvec,
              TestingParams=TestParamVec,  PairParams = PairParams, output = false,
-             Incidence = Inc, Prevalence = Prev)
+             PkgParams = PkgVec, Incidence = Inc, Prevalence = Prev)
 
     #run baseline case
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    push!(PkgVec, PkgP)
     push!(ParamVec, PP)
     push!(PairParams, PairPs)
     df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern;  NPPerDay = NPvec,
-        PairParams = PairParams, output = false, Incidence = Inc, Prevalence = Prev)
+             PkgParams = PkgVec, PairParams = PairParams, output = false, 
+             Incidence = Inc, Prevalence = Prev)
     df2["new_comply_prob"] = zeros(nrow(df2))
     df2["tperiod"] = zeros(nrow(df2))
     df2["protocol"] = fill("No testing", nrow(df2))
@@ -506,10 +605,10 @@ function run_param_sweep_outbreak_fomite_parcel(Nrepeats::Int = 10000)
         end
         if i == 1
             df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
-                  NPPerDay = NPvec, output = false)
+                   NPPerDay = NPvec, output = false)
         else
             dfh = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
-                  NPPerDay = NPvec, output = false)
+                   NPPerDay = NPvec, output = false)
             df = vcat(df,dfh)
         end
 
@@ -546,10 +645,10 @@ function run_param_sweep_outbreak_fomite_pairs(Nrepeats::Int = 10000)
         end
         if i == 1
             df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
-                  PairParams = PairParams, NPPerDay = NPvec, output = false)
+                   PairParams = PairParams, NPPerDay = NPvec, output = false)
         else
             dfh = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
-                  PairParams = PairParams, NPPerDay = NPvec, output = false)
+                   PairParams = PairParams, NPPerDay = NPvec, output = false)
             df = vcat(df,dfh)
         end
 
@@ -559,90 +658,213 @@ function run_param_sweep_outbreak_fomite_pairs(Nrepeats::Int = 10000)
     return df
 end
 
-function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,1},
-                                Inc::Array{Float64,1}, Nrepeats::Int = 10000)
+function run_all_interventions_separately_scenario_parcel(Prev::Array{Float64,1},
+            Inc::Array{Float64,1}, Demand::Array{Float64,1}, Nrepeats::Int = 10000)
     NWeeks = Int64(ceil(length(Prev)/7))
-    NPh = 3000
     OccPattern = repeat(ParcelOccPattern,NWeeks)
     PkgPattern = repeat(ParcelPkgPattern,NWeeks)
     OccPattern = OccPattern[1:length(Prev)]
     PkgPattern = PkgPattern[1:length(Prev)]
-    NPvec = Int64.(round.(NPh*PkgPattern))
-    Office_WFH = [false, true, true, true, true, true, true]
-    TeamDistance = [1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0]
-    Testing = [false, false, false, true, true, true, true]
-    HouseShareIsolation = [false, false, false, false, true, true, true]
-    CarShareIsolation = [false, false, false, false, false, true, true]
-    CohortIsolation = [false, false, false, false, false, false, true]
+    NPvec = Int64.(round.(Demand.*PkgPattern))
+    
+    Pisol = [0.25, 0.75]
+    TeamDistance = [1.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    HouseShareIsolation = [false, false, true, false, false, false, false, false]
+    Office_WFH = [false, false, false, true, false, false, false, false]
+    Testing = [false, false, false, false, true, true, false, false]
+    NCPtest = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+    CarShareIsolation = [false, false, false, false, false, false, true, false]
+    CohortIsolation = [false, false, false, false, false, false, false, true]
+    
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgP = copy(BasicPkgParams)
+    for pi in Pisol
+        for i in 1:length(Office_WFH)
+            PP = copy(BasicParcelParams)
+            TP = copy(BasicTestingParams)
+            PP["Pisol"] = pi
+            PP["Office_WFH"] = Office_WFH[i]
+            PP["TeamDistances"] = fill(TeamDistance[i],3)
+            PP["HouseShareIsolation"] = HouseShareIsolation[i]
+            PP["CarShareIsolation"] = CarShareIsolation[i]
+            PP["CohortIsolation"] = CohortIsolation[i]
+            PP["SimType"] = Scenario_sim
+            TP["is_testing"] = Testing[i]
+            TP["new_comply_prob"] = NCPtest[i]
+            push!(ParamVec, PP)
+            push!(TestParamVec, TP)
+            push!(PkgVec, PkgP)
+        end
+    end
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern;
+                  NPPerDay = NPvec, TestingParams=TestParamVec,
+                  Incidence = Inc, Prevalence = Prev, PkgParams = PkgVec, 
+                  filename="all_interventions_sep_parcel.csv")
+    return df
+end
+
+function run_all_interventions_separately_scenario_pairs(Prev::Array{Float64,1},
+            Inc::Array{Float64,1}, Demand::Array{Float64,1}, Nrepeats::Int = 10000)
+    NWeeks = Int64(ceil(length(Prev)/7))
+    OccPattern = repeat(BulkOccPattern,NWeeks)
+    PkgPattern = repeat(BulkPkgPattern,NWeeks)
+    OccPattern = OccPattern[1:length(Prev)]
+    PkgPattern = PkgPattern[1:length(Prev)]
+    NPvec = Int64.(round.(Demand.*PkgPattern))
+    
+    Pisol = [0.25, 0.75]
+    TeamDistance = [1.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    OpenWindows = [false, false, true, false, false, false, false, false, false, false]
+    HouseShareIsolation = [false, false, false, true, false, false, false, false, false, false]
+    FixedPairs = [false, false, false, false, true, false, false, false, false, false]
+    PairIsolation = [false, false, false, false, true, false, false, false, false, false]
+    Office_WFH = [false, false, false, false, false, true, false, false, false, false]
+    Testing = [false, false, false, false, false, false, true, true, false, false]
+    NCPtest = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+    CarShareIsolation = [false, false, false, false, false, false, false, false, true, false]
+    CohortIsolation = [false, false, false, false, false, false, false, false, false, true]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
-    for i in 1:length(Office_WFH)
-        PP = copy(BasicParcelParams)
-        TP = copy(BasicTestingParams)
-        if Office_WFH[i]
-            PP["NO"] = 0
-            PP["NOteams"] = 0
+    PairParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgP = copy(BasicPkgParams)
+    for pi in Pisol
+        for i in 1:length(Office_WFH)
+            PP = copy(BasicBulkParams)
+            TP = copy(BasicTestingParams)
+            PairPs = copy(BasicPairParams)
+            PP["Pisol"] = pi
+            PP["Office_WFH"] = Office_WFH[i]
+            PP["TeamDistances"] = fill(TeamDistance[i],3)
+            PP["HouseShareIsolation"] = HouseShareIsolation[i]
+            PP["CarShareIsolation"] = CarShareIsolation[i]
+            PP["CohortIsolation"] = CohortIsolation[i]
+            PP["SimType"] = Scenario_sim
+            TP["is_testing"] = Testing[i]
+            TP["new_comply_prob"] = NCPtest[i]
+            PairPs["fixed_driver_pairs"] = FixedPairs[i]
+            PairPs["fixed_loader_pairs"] = FixedPairs[i]
+            PairPs["PairIsolation"] = PairIsolation[i]
+            push!(ParamVec, PP)
+            push!(TestParamVec, TP)
+            push!(PairParamVec, PairPs)
+            push!(PkgVec, PkgP)
         end
-        PP["TeamDistances"] = fill(TeamDistance[i],3)
-        PP["HouseShareIsolation"] = HouseShareIsolation[i]
-        PP["CarShareIsolation"] = CarShareIsolation[i]
-        PP["CohortIsolation"] = CohortIsolation[i]
-        TP["is_testing"] = Testing[i]
-        push!(ParamVec, PP)
-        push!(TestParamVec, TP)
     end
     df = run_many_sims(ParamVec, Nrepeats, OccPattern;
                   NPPerDay = NPvec, TestingParams=TestParamVec,
                   Incidence = Inc, Prevalence = Prev,
-                  filename="all_interventions_parcel.csv")
+                  PairParams = PairParamVec, PkgParams = PkgVec, 
+                  filename="all_interventions_sep_pairs.csv")
     return df
-
 end
 
-function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1},
-                                Inc::Array{Float64,1}, Nrepeats::Int = 10000)
+
+function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,1},
+            Inc::Array{Float64,1}, Demand::Array{Float64,1}, Nrepeats::Int = 10000)
     NWeeks = Int64(ceil(length(Prev)/7))
-    NPh = 3000
     OccPattern = repeat(ParcelOccPattern,NWeeks)
     PkgPattern = repeat(ParcelPkgPattern,NWeeks)
     OccPattern = OccPattern[1:length(Prev)]
     PkgPattern = PkgPattern[1:length(Prev)]
-    NPvec = Int64.(round.(NPh*PkgPattern))
-    Office_WFH = [false, true, true, true, true, true, true, true]
-    TeamDistance = [1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
-    Testing = [false, false, false, true, true, true, true, true]
-    PairIsolation = [false, false, false, false, true, true, true, true]
-    HouseShareIsolation = [false, false, false, false, false, true, true, true]
+    NPvec = Int64.(round.(Demand.*PkgPattern))
+    
+    Pisol = [0.25, 0.75]
+    TeamDistance = [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+    HouseShareIsolation = [false, false, true, true, true, true, true, true]
+    Office_WFH = [false, false, false, true, true, true, true, true]
+    Testing = [false, false, false, false, true, true, true, true]
+    NCPtest = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
     CarShareIsolation = [false, false, false, false, false, false, true, true]
     CohortIsolation = [false, false, false, false, false, false, false, true]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
-    PairParamVec = Array{Dict{Any,Any},1}(undef,0)
-    for i in 1:length(Office_WFH)
-        PP = copy(BasicBulkParams)
-        TP = copy(BasicTestingParams)
-        PairPs = copy(BasicPairParams)
-        if Office_WFH[i]
-            PP["NO"] = 0
-            PP["NOteams"] = 0
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgP = copy(BasicPkgParams)
+    for pi in Pisol
+        for i in 1:length(Office_WFH)
+            PP = copy(BasicParcelParams)
+            TP = copy(BasicTestingParams)
+            PP["Pisol"] = pi
+            PP["Office_WFH"] = Office_WFH[i]
+            PP["TeamDistances"] = fill(TeamDistance[i],3)
+            PP["HouseShareIsolation"] = HouseShareIsolation[i]
+            PP["CarShareIsolation"] = CarShareIsolation[i]
+            PP["CohortIsolation"] = CohortIsolation[i]
+            PP["SimType"] = Scenario_sim
+            TP["is_testing"] = Testing[i]
+            TP["new_comply_prob"] = NCPtest[i]
+            push!(ParamVec, PP)
+            push!(TestParamVec, TP)
+            push!(PkgVec, PkgP)
         end
-        PP["TeamDistances"] = fill(TeamDistance[i],3)
-        PairPs["PairIsolation"] = PairIsolation[i]
-        PP["HouseShareIsolation"] = HouseShareIsolation[i]
-        PP["CarShareIsolation"] = CarShareIsolation[i]
-        PP["CohortIsolation"] = CohortIsolation[i]
-        TP["is_testing"] = Testing[i]
-        push!(ParamVec, PP)
-        push!(TestParamVec, TP)
-        push!(PairParamVec, PairPs)
+    end
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern;
+                  NPPerDay = NPvec, TestingParams=TestParamVec,
+                  Incidence = Inc, Prevalence = Prev, PkgParams = PkgVec, 
+                  filename="all_interventions_cumul_parcel.csv")
+    return df
+
+end
+
+function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1},
+             Inc::Array{Float64,1}, Demand::Array{Float64,1}, Nrepeats::Int = 10000)
+    NWeeks = Int64(ceil(length(Prev)/7))
+    OccPattern = repeat(BulkOccPattern,NWeeks)
+    PkgPattern = repeat(BulkPkgPattern,NWeeks)
+    OccPattern = OccPattern[1:length(Prev)]
+    PkgPattern = PkgPattern[1:length(Prev)]
+    NPvec = Int64.(round.(Demand.*PkgPattern))
+    
+    Pisol = [0.25, 0.75]
+    TeamDistance = [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+    OpenWindows = [false, false, true, true, true, true, true, true, true, true]
+    HouseShareIsolation = [false, false, false, true, true, true, true, true, true, true]
+    FixedPairs = [false, false, false, false, true, true, true, true, true, true]
+    PairIsolation = [false, false, false, false, true, true, true, true, true, true]
+    Office_WFH = [false, false, false, false, false, true, true, true, true, true]
+    Testing = [false, false, false, false, false, false, true, true, true, true]
+    NCPtest = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
+    CarShareIsolation = [false, false, false, false, false, false, false, false, true, true]
+    CohortIsolation = [false, false, false, false, false, false, false, false, false, true]
+
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PairParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgP = copy(BasicPkgParams)
+    for pi in Pisol
+        for i in 1:length(Office_WFH)
+            PP = copy(BasicBulkParams)
+            TP = copy(BasicTestingParams)
+            PairPs = copy(BasicPairParams)
+            PP["Pisol"] = pi
+            PP["Office_WFH"] = Office_WFH[i]
+            PP["TeamDistances"] = fill(TeamDistance[i],3)
+            PP["HouseShareIsolation"] = HouseShareIsolation[i]
+            PP["CarShareIsolation"] = CarShareIsolation[i]
+            PP["CohortIsolation"] = CohortIsolation[i]
+            PP["SimType"] = Scenario_sim
+            TP["is_testing"] = Testing[i]
+            TP["new_comply_prob"] = NCPtest[i]
+            PairPs["fixed_driver_pairs"] = FixedPairs[i]
+            PairPs["fixed_loader_pairs"] = FixedPairs[i]
+            PairPs["PairIsolation"] = PairIsolation[i]
+            push!(ParamVec, PP)
+            push!(TestParamVec, TP)
+            push!(PairParamVec, PairPs)
+            push!(PkgVec, PkgP)
+        end
     end
     df = run_many_sims(ParamVec, Nrepeats, OccPattern;
                   NPPerDay = NPvec, TestingParams=TestParamVec,
                   Incidence = Inc, Prevalence = Prev,
-                  PairParams = PairParamVec,
-                  filename="all_interventions_pairs.csv")
+                  PairParams = PairParamVec, PkgParams = PkgVec, 
+                  filename="all_interventions_cumul_pairs.csv")
     return df
 end
 

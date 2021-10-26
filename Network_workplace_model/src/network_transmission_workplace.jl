@@ -58,9 +58,10 @@ const room_sep = 1 - log(25*(BreathRate^2/(ACH*room_size + BreathRate)))/log(2)
 
 #const t_breaks = 1/24       #Time in break/lunch areas (1 hr)
 #around 10 hrs per day: 85 deliveries per day,
-const ParcelTimesPerDelivery = Dict("t_cabin"=>1/(12),"t_doorstep"=>1/(120), "t_handling"=>1/(60),
-                                "t_picking"=>1/(60))
-const BulkTimesPerDelivery = Dict("t_cabin"=>1/(12),"t_doorstep"=>1/(60), "t_handling"=>1/(12), "t_picking"=>1/(12))
+const ParcelTimesPerDelivery = Dict("t_cabin"=>1.0/12.0,"t_doorstep"=>1/120.0, "t_handling"=>1/60.0,
+                                "t_picking"=>1.0/60.0)
+const BulkTimesPerDelivery = Dict("t_cabin"=>1.0/6.0,"t_doorstep"=>1.0/12.0, 
+                                  "t_handling"=>1.0/12.0, "t_picking"=>1.0/12.0)
 const job_labels = ["D","L","O"]
 const job_names = ["Drivers","Pickers","Other"]
 const job_colours = [colorant"blue",colorant"orange",colorant"green"]
@@ -104,7 +105,6 @@ function add_cohort_to_graph!(G::MetaGraphs.MetaGraph, team::Array{Int64,1}, w::
     end
 end
 
-
 function get_team_edge_weight(team::Array{Int64,1}, modifiers::Dict)
     #assume contacts are one-to-one, total time is preserved
     edge_weight = return_infection_weight(modifiers["distance"],
@@ -112,6 +112,13 @@ function get_team_edge_weight(team::Array{Int64,1}, modifiers::Dict)
         modifiers["outside"], true)
 
     return edge_weight
+end
+
+function update_cohort_edge_weight!(G::MetaGraphs.MetaGraph, team::Array{Int64,1}, w::Float64)
+    for i in 1:length(team)
+        jadd = (i+1):length(team)
+        set_prop!.(Ref(G), Ref(team[i]), team[jadd], Ref(:weight), Ref(w))
+    end
 end
 
 #split drivers into teams who all have pre-shift meeting with one office person? Or one warehouse person?
@@ -187,7 +194,6 @@ function generate_cohort_graph!(sim::Dict, Nteams::Array{Int64,1}, TeamF2FTime::
         Nstart += sim["N"][j]
         Ntstart += Nteams[j]
     end
-
     graph = LightGraphs.SimpleGraph(sim["Ntot"])
     team_graph = MetaGraphs.MetaGraph(graph)
     Ntstart = 0
@@ -204,6 +210,49 @@ function generate_cohort_graph!(sim::Dict, Nteams::Array{Int64,1}, TeamF2FTime::
     end
 
     sim["cohort_network"] = team_graph
+    sim["cohorts"] = Array{Array{Array{Int64,1},1},1}(undef,3)
+    sim["cohorts"][1] = teams[1:Nteams[1]]
+    sim["cohorts"][2] = teams[(Nteams[1]+1):(Nteams[1]+Nteams[2])]
+    sim["cohorts"][3] = teams[(Nteams[1]+Nteams[2]+1):(Nteams[1]+Nteams[2]+Nteams[3])] 
+end
+
+function find_cohort_no_and_members(sim::Dict, j::Int8, i::Int64)
+    nc = 0
+    for (ic, c) in enumerate(sim["cohorts"][j])
+        if i in c
+            nc = ic
+        end
+    end
+    members = sim["cohorts"][j][nc]
+    return nc, members[members .!= i]
+end
+
+function shuffle_cohorts!(sim::Dict, p_s::Float64, Nteams::Array{Int64,1}, TeamF2FTime::Array{Float64,1},
+                               outside::Array{Bool,1}, distance::Array{Float64,1})
+    to_move = randsubseq(1:sim["Ntot"], p_s) #number to move
+    for i in to_move
+        j = sim["job"][i]
+        if Nteams[j] > 1
+            old_team, old_cohort = find_cohort_no_and_members(sim,j,i)
+            if length(old_cohort) > 0
+                rem_edge!.(Ref(sim["cohort_network"]),Ref(i),old_cohort)   #remove all edges
+            end
+            sim["cohorts"][j][old_team] = old_cohort
+            w_old = get_team_edge_weight(old_cohort, Dict("outside"=>outside[j],
+                           "distance"=>distance[j],"rel_time"=>TeamF2FTime[j]))
+            update_cohort_edge_weight!(sim["cohort_network"], old_cohort, w_old)
+
+            selection = 1:Nteams[j]
+            selection = selection[selection .!= old_team]
+            new_team = rand(selection)
+            add_edge!.(Ref(sim["cohort_network"]),Ref(i),sim["cohorts"][j][new_team]) 
+            push!(sim["cohorts"][j][new_team],i)
+            w_new = get_team_edge_weight(sim["cohorts"][j][new_team], 
+                    Dict("outside"=>outside[j], "distance"=>distance[j],
+                    "rel_time"=>TeamF2FTime[j]))
+            update_cohort_edge_weight!(sim["cohort_network"], sim["cohorts"][j][new_team], w_new)
+        end
+    end
 end
 
 
@@ -296,11 +345,11 @@ function apply_contact_mixing_params!(sim::Dict, Params::Dict)
             sim["contact_prob_mat"][i,j] = Params["phi"]*sim["contact_prob_mat"][i,j]
         end
     end
-    norm = Params["tD"]*sim["N"][1]*((sim["N"][1]-1)/2 + Params["phi"]*
-           (sim["N"][2] + sim["N"][3])) + sim["N"][2]*(sim["N"][2]-1)/2 +
-           sim["N"][3]*(sim["N"][3]-1)/2 + Params["phi"]*sim["N"][2]*sim["N"][3]
-    coeff = 0.5*sim["Ntot"]*(sim["Ntot"]-1)/norm
-    sim["contact_prob_mat"] .*= coeff
+    #norm = Params["tD"]*sim["N"][1]*((sim["N"][1]-1)/2 + Params["phi"]*
+    #       (sim["N"][2] + sim["N"][3])) + sim["N"][2]*(sim["N"][2]-1)/2 +
+    #       sim["N"][3]*(sim["N"][3]-1)/2 + Params["phi"]*sim["N"][2]*sim["N"][3]
+    #coeff = 0.5*sim["Ntot"]*(sim["Ntot"]-1)
+    #sim["contact_prob_mat"] .*= coeff
 end
 
 """
@@ -372,7 +421,8 @@ end
 """
 
 """
-function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dict)
+function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dict; 
+                          office_wfh::Bool = false)
 
     at_work = zeros(Bool,sim["Ntot"])
     NAs = zeros(Int64,sim["Ntot"])
@@ -395,10 +445,11 @@ function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dic
     at_work[at_work_loaders] .= true
     NAs[at_work_loaders] .= NAloaders
 
-
-    at_work_office, NAoffice = get_individual_assignments!(sim, occ, Ncons, 3)
-    at_work[at_work_office] .= true
-    NAs[at_work_office] .= NAoffice
+    if office_wfh == false
+        at_work_office, NAoffice = get_individual_assignments!(sim, occ, Ncons, 3)
+        at_work[at_work_office] .= true
+        NAs[at_work_office] .= NAoffice
+    end
 
 
     return at_work, NAs
@@ -535,49 +586,52 @@ end
 
 
 
-"""
+# """
 
-"""
-function get_in_work(sim::Dict, occ::Float64, Ncons::Int64,
-                driver_pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0),
-                driver_cons::Array{Int64,1} = Array{Int64,1}(undef,0),
-                loader_pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0),
-                loader_cons::Array{Int64,1} = Array{Int64,1}(undef,0))
-    #wih driver pairs
-    at_work = zeros(Bool,sim["Ntot"])
-    NAs = zeros(Int64,sim["Ntot"])
-    to_select = []
-    if length(driver_pairs) > 0
-        at_work[vec(driver_pairs)] .= true
-        NAs[driver_pairs[1,:]] .= driver_cons
-        NAs[driver_pairs[2,:]] .= driver_cons
-    else
-        push!(to_select,1)
-    end
-    if length(loader_pairs) > 0
-        at_work[vec(loader_pairs)] .= true
-        NAs[loader_pairs[1,:]] .= loader_cons
-        NAs[loader_pairs[2,:]] .= loader_cons
-    else
-        push!(to_select,2)
-    end
-    push!(to_select,3)
-    for j in to_select
-        job = sim["job_sorted_nodes"][j]
-        available = job[sim["isolation_status"][job] .== false]
-        if length(available)/length(job) > occ
-            w = sample(job, round(Int,occ*length(job)), replace=false)
-        else
-            w = available
-        end
-        if j < 3
-            NAs[w] .= rand(Multinomial(Ncons,length(w)))
-        end
-        at_work[w] .= true
-    end
+# """
+# function get_in_work(sim::Dict, occ::Float64, Ncons::Int64,
+#                 driver_pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0),
+#                 driver_cons::Array{Int64,1} = Array{Int64,1}(undef,0),
+#                 loader_pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0),
+#                 loader_cons::Array{Int64,1} = Array{Int64,1}(undef,0),
+#                 office_wfh::Bool = false)
+#     #wih driver pairs
+#     at_work = zeros(Bool,sim["Ntot"])
+#     NAs = zeros(Int64,sim["Ntot"])
+#     to_select = []
+#     if length(driver_pairs) > 0
+#         at_work[vec(driver_pairs)] .= true
+#         NAs[driver_pairs[1,:]] .= driver_cons
+#         NAs[driver_pairs[2,:]] .= driver_cons
+#     else
+#         push!(to_select,1)
+#     end
+#     if length(loader_pairs) > 0
+#         at_work[vec(loader_pairs)] .= true
+#         NAs[loader_pairs[1,:]] .= loader_cons
+#         NAs[loader_pairs[2,:]] .= loader_cons
+#     else
+#         push!(to_select,2)
+#     end
+#     if office_wfh == false
+#         push!(to_select,3)
+#     end
+#     for j in to_select
+#         job = sim["job_sorted_nodes"][j]
+#         available = job[sim["isolation_status"][job] .== false]
+#         if length(available)/length(job) > occ
+#             w = sample(job, round(Int,occ*length(job)), replace=false)
+#         else
+#             w = available
+#         end
+#         if j < 3
+#             NAs[w] .= rand(Multinomial(Ncons,length(w)))
+#         end
+#         at_work[w] .= true
+#     end
 
-    return at_work, NAs
-end
+#     return at_work, NAs
+# end
 
 # function get_infectivities(sim::Dict, i_day::Int)
 #     nr = 1:sim["Ntot"]
@@ -1017,7 +1071,11 @@ end
 function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Float64, Ncons::Int64, Params::Dict, PkgParams::Dict, PairParams::Dict, TestParams::Dict, cust_modifiers::Dict)
 
     reset_daily_contact_networks!(sim)
-
+    
+    Nteams = [Params["NDteams"],Params["NLteams"],Params["NOteams"]]
+    shuffle_cohorts!(sim, Params["CohortChangeRate"], Nteams, Params["TeamTimes"],
+                               Params["TeamsOutside"], Params["TeamDistances"])
+    
     #do_testing
     if TestParams["is_testing"]
         new_isolators = do_testing!(sim, TestParams, i_day, sim["isolation_network"])
@@ -1027,7 +1085,12 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
     update_all_statuses!(sim, i_day)
 
     #update_in_work
-    at_work, NAssignments = get_assignments!(sim, Occ, Ncons, PairParams)
+    if haskey(Params,"Office_WFH")
+        at_work, NAssignments = get_assignments!(sim, Occ, Ncons, PairParams; 
+              office_wfh = Params["Office_WFH"])
+    else
+        at_work, NAssignments = get_assignments!(sim, Occ, Ncons, PairParams)
+    end
     update_in_work!(sim, at_work)
 
     infpairs = Array{Int64,2}(undef,3,0)
@@ -1093,9 +1156,9 @@ function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay
     end
     create_isolation_network!(sim, IsolParams)
 
+    #TODO
     CustModifiers = Dict("outdoor_contact_frac"=>1.0, "sanitise_frequency"=>0.0, "mask_prob"=>0.0)
     #edit these based on params
-
 
     while Go && (i_day <= length(OccPerDay))
         infpairs = sim_loop_delivery_wp!(sim, sim_summary, i_day,

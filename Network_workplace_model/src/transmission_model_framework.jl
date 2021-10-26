@@ -639,11 +639,11 @@ end
 """
 
 """
-function scenario_sim_setup!(sim::Dict, inc::Array{Float64,1}, prev::Array{Float64,1}, i_day::Int64, Ndays::Int64)
+function scenario_sim_setup!(sim::Dict, i_day::Int64, Ndays::Int64)
 
     sim_summary = basic_sim_setup(sim, i_day, Ndays)
-    sim_summary["Incidence"] = inc
-    sim_summary["Prevalence"] = prev
+    sim_summary["Incidence"] = sim["Incidence"]
+    sim_summary["Prevalence"] = sim["Prevalence"]
     for j in 1:sim["Njobs"]
         sim_summary["Susceptible"][j, 1:(i_day-1)] .= sim["N"][j]
     end
@@ -756,7 +756,7 @@ function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict,
         Anyinf = any(((sim["infection_status"] .== Susc)
                       .+ (sim["infection_status"] .== Recd)) .== 0)
     elseif Params["SimType"] == Scenario_sim
-        sim_summary = scenario_sim_setup!(sim, Incidence, Prevalence, i_day, length(OccPerDay))
+        sim_summary = scenario_sim_setup!(sim, i_day, length(OccPerDay))
     end
 
     return sim_summary, i_day, Anyinf
