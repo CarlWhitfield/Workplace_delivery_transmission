@@ -3,14 +3,18 @@ include("dataframe_write.jl")
 NweeksDefault = 52
 
 #check and update
-BasicParcelParams = Dict("ND"=>50, "NL"=>25, "NO"=>15, "NDteams"=>3, "NLteams"=>2,
+NDparcel_def = 50
+NLparcel_def = 25
+NOparcel_def = 15
+NStaffparcel_def = NDparcel_def + NLparcel_def + NOparcel_def
+BasicParcelParams = Dict("ND"=>NDparcel_def, "NL"=>NLparcel_def, "NO"=>NOparcel_def, "NDteams"=>3, "NLteams"=>2,
         "NOteams"=>1, "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0,
-        "p_contact"=>(2.0/(38 + 20 + 10)), "tD"=>0.05,"phi"=>1.0, "InfInit"=>0,
+        "p_contact"=>(2.0/(NStaffparcel_def)), "tD"=>0.05,"phi"=>1.0, "InfInit"=>0,
         "SimType"=>Outbreak_sim, "TeamTimes"=>[0.25,1.0,1.0],
         "TeamsOutside"=>[true,true,false], "TeamDistances"=>[1.0,1.0,1.0],
-         "HouseShareFactor"=>0.5, "CarShareFactor"=>0.5, "BreakContactProb"=>0.25,
-         "CohortChangeRate"=>(1.0/(38 + 20 + 10)))
-ParcelOccPattern = 0.95 .* [0.90,1.0,1.0,0.99,0.91,0.55,0.0]
+         "HouseShareFactor"=>0.05, "CarShareFactor"=>0.05, "BreakContactProb"=>0.25,
+         "CohortChangeRate"=>(1.0/(NStaffparcel_def)))
+ParcelOccPattern = 0.97 .* [0.90,1.0,1.0,0.99,0.91,0.55,0.0]
 ParcelPkgPattern = [0.89,1.20,1.14,1.10,1.0,0.37,0.0]
 NPparcel = 3000
 
@@ -21,16 +25,24 @@ BasicTestingParams = Dict("is_testing"=>true, "new_comply_prob"=>0.25,
              "test_pause"=>21.0)
 BasicPkgParams = Dict("p_fomite_trans"=>0.0001, "Dtime"=>8, "Ltime"=>4, "PkgHlife"=>3)
 
-BasicBulkParams = Dict("ND"=>20, "NL"=>16, "NO"=>8, "NDteams"=>2, "NLteams"=>2, "NOteams"=>1,
-                 "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0, "p_contact"=>(2.0/(20+16+8)),
-                 "tD"=>0.1,"phi"=>1.0,  "InfInit"=>0, "SimType"=>Outbreak_sim,
-                 "TeamTimes"=>[0.25,1.0,1.0], "TeamsOutside"=>[true,true,false],
-                 "TeamDistances"=>[1.0,1.0,1.0], "HouseShareFactor"=>0.5,
-                 "CarShareFactor"=>0.5, "BreakContactProb"=>0.25, "CohortChangeRate"=>(1.0/(20+16+8)))
+
+NDbulk_def = 20
+NLbulk_def = 16
+NObulk_def = 8
+NStaffbulk_def = NDbulk_def + NLbulk_def + NObulk_def
+BasicBulkParams = Dict("ND"=>NDbulk_def, "NL"=>NLbulk_def, "NO"=>NObulk_def, 
+                       "NDteams"=>2, "NLteams"=>2, "NOteams"=>1,
+                       "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0, 
+                       "p_contact"=>(2.0/(NStaffbulk_def)),
+                       "tD"=>0.1, "phi"=>1.0, "InfInit"=>0, "SimType"=>Outbreak_sim,
+                       "TeamTimes"=>[0.25,1.0,1.0], "TeamsOutside"=>[true,true,false],
+                       "TeamDistances"=>[1.0,1.0,1.0], "HouseShareFactor"=>0.05,
+                       "CarShareFactor"=>0.05, "BreakContactProb"=>0.25, 
+                       "CohortChangeRate"=>(1.0/(NStaffbulk_def)))
 BasicPairParams = Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
                   "fixed_driver_pairs"=>true, "fixed_loader_pairs"=>true,
                   "is_window_open"=>false, "PairIsolation"=>true)
-BulkOccPattern = 0.95 .* [0.82, 0.98, 0.97, 0.99, 1.0, 0.84, 0.47]
+BulkOccPattern = 0.97 .* [0.82, 0.98, 0.97, 0.99, 1.0, 0.84, 0.47]
 BulkPkgPattern = [0.80, 0.94, 0.95, 0.94,  1.0, 0.81, 0.44]
 NPbulk = 210
 
@@ -865,6 +877,137 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
                   Incidence = Inc, Prevalence = Prev,
                   PairParams = PairParamVec, PkgParams = PkgVec, 
                   filename="all_interventions_cumul_pairs.csv")
+    return df
+end
+
+function run_param_sweep_outbreak_transmod_parcel(Nrepeats::Int = 10000)
+    OccPattern = repeat(ParcelOccPattern,NweeksDefault)
+    PkgPattern = repeat(ParcelPkgPattern,NweeksDefault)
+    NPvec = Int64.(round.(NPparcel*PkgPattern))
+    F2F_mod = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+    SS_mod = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+
+    PP = copy(BasicParcelParams)
+    PkgP = copy(BasicPkgParams)
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    NPvec = Int64.(round.(np*PkgPattern))
+    for (i,f2f) in enumerate(F2F_mod)
+        PP["F2F_mod"] = f2f
+        for (j,ss) in enumerate(SS_mod)
+            PP["SS_mod"] = ss
+            push!(ParamVec, PP)
+            push!(PkgParams, PkgP)
+        end
+    end
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
+                   NPPerDay = NPvec, filename = "transmod_sweep_parcel.csv")
+
+    return df
+end
+
+function run_param_sweep_outbreak_transmod_pairs(Nrepeats::Int = 10000)
+    OccPattern = repeat(BulkOccPattern,NweeksDefault)
+    PkgPattern = repeat(BulkPkgPattern,NweeksDefault)
+    NPvec = Int64.(round.(NPbulk*PkgPattern))
+    F2F_mod = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+    SS_mod = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+
+    PP = copy(BasicBulkParams)
+    PairPs = copy(BasicPairParams)
+    PkgP = copy(BasicPkgParams)
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    PairParams = Array{Dict{Any,Any},1}(undef,0)
+    for (i,f2f) in enumerate(F2F_mod)
+        PP["F2F_mod"] = f2f
+        for (j,ss) in enumerate(SS_mod)
+            PP["SS_mod"] = ss
+            push!(ParamVec, PP)
+            push!(PkgParams, PkgP)
+            push!(PairParams, PairPs)
+        end
+    end
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
+            PairParams = PairParams, NPPerDay = NPvec, filename = "transmod_sweep_pairs.csv")
+
+    return df
+end
+
+function run_param_sweep_outbreak_wpsize_parcel(Nrepeats::Int = 10000)
+    OccPattern = repeat(ParcelOccPattern,NweeksDefault)
+    PkgPattern = repeat(ParcelPkgPattern,NweeksDefault)
+    
+    rel_size = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+
+    PP = copy(BasicParcelParams)
+    PkgP = copy(BasicPkgParams)
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    for (i,rs) in enumerate(rel_size)
+        NPvec = Int64.(round.(rs*NPparcel*PkgPattern))
+        PP["ND"] = Int64(round(rs*BasicParcelParams["ND"]))
+        PP["NL"] = Int64(round(rs*BasicParcelParams["NL"]))
+        PP["NO"] = Int64(round(rs*BasicParcelParams["NO"]))
+        PP["NDteams"] = Int64(round(rs*BasicParcelParams["NDteams"]))
+        PP["NLteams"] = Int64(round(rs*BasicParcelParams["NLteams"]))
+        PP["NOteams"] = Int64(round(rs*BasicParcelParams["NOteams"]))
+        PP["p_contact"] = Int64(round(BasicParcelParams["p_contact"]/rs))
+        PP["CohortChangeRate"] = Int64(round(BasicParcelParams["CohortChangeRate"]/rs))
+        push!(ParamVec, PP)
+        push!(PkgParams, PkgP)
+        if i == 1
+            df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
+                   NPPerDay = NPvec, output=false)
+        else
+            dfh = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
+                   NPPerDay = NPvec, output=false)
+            df = vcat(df,dfh)
+        end
+    end
+    
+    CSV.write("wpsize_param_sweep_parcel.csv", df)
+    
+    return df
+end
+
+function run_param_sweep_outbreak_wpsize_pairs(Nrepeats::Int = 10000)
+    OccPattern = repeat(BulkOccPattern,NweeksDefault)
+    PkgPattern = repeat(BulkPkgPattern,NweeksDefault)
+    rel_size = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+
+    PP = copy(BasicBulkParams)
+    PairPs = copy(BasicPairParams)
+    PkgP = copy(BasicPkgParams)
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgParams = Array{Dict{Any,Any},1}(undef,0)
+    PairParams = Array{Dict{Any,Any},1}(undef,0)
+    for (i,rs) in enumerate(rel_size)
+        NPvec = Int64.(round.(rs*NPbulk*PkgPattern))
+        PP["ND"] = Int64(round(rs*BasicBulkParams["ND"]))
+        PP["NL"] = Int64(round(rs*BasicBulkParams["NL"]))
+        PP["NO"] = Int64(round(rs*BasicBulkParams["NO"]))
+        PP["NDteams"] = Int64(round(rs*BasicBulkParams["NDteams"]))
+        PP["NLteams"] = Int64(round(rs*BasicBulkParams["NLteams"]))
+        PP["NOteams"] = Int64(round(rs*BasicBulkParams["NOteams"]))
+        PP["p_contact"] = Int64(round(BasicBulkParams["p_contact"]/rs))
+        PP["CohortChangeRate"] = Int64(round(BasicBulkParams["CohortChangeRate"]/rs))
+        push!(ParamVec, PP)
+        push!(PkgParams, PkgP)
+        push!(PairParams, PairPs)
+        if i == 1
+            df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
+                PairParams = PairParams, NPPerDay = NPvec, output=false)
+        else
+            dfh = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgParams,
+                PairParams = PairParams, NPPerDay = NPvec, output=false)
+            df = vcat(df,dfh)
+        end
+        
+    end
+    
+    CSV.write("wpsize_param_sweep_pairs.csv", df)
+
     return df
 end
 
