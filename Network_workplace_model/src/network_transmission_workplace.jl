@@ -145,7 +145,8 @@ end
 `distance` = Distance (for each job role) between contacts
 """
 function generate_cohort_graph!(sim::Dict, Nteams::Array{Int64,1}, TeamF2FTime::Array{Float64,1},
-                               outside::Array{Bool,1}, distance::Array{Float64,1})
+                               outside::Array{Bool,1}, distance::Array{Float64,1}; F2F_mod::Float64=1.0,
+                               SS_mod::Float64=1.0)
     team_assign = Array{Array{Int64,1},1}(undef, length(Nteams))
     teams = Array{Array{Int64,1},1}(undef, sum(Nteams))
     Nstart = 0
@@ -199,10 +200,10 @@ function generate_cohort_graph!(sim::Dict, Nteams::Array{Int64,1}, TeamF2FTime::
     Ntstart = 0
     for j in 1:length(sim["N"])
         for n in 1:Nteams[j]
-            w = get_team_edge_weight(teams[Ntstart+n], Dict("outside"=>outside[j],
+            w = F2F_mod*get_team_edge_weight(teams[Ntstart+n], Dict("outside"=>outside[j],
                            "distance"=>distance[j],"rel_time"=>TeamF2FTime[j]))
             if j == 3
-                w += return_infection_weight(room_sep, t_office, false, false)
+                w += SS_mod*return_infection_weight(room_sep, t_office, false, false)
             end
             add_cohort_to_graph!(team_graph, teams[Ntstart+n], w)
         end
@@ -259,11 +260,11 @@ end
 """
 
 """
-function generate_car_share_and_house_share_graphs!(sim::Dict, HomeParams::Dict)
+function generate_car_share_and_house_share_graphs!(sim::Dict, HomeParams::Dict; F2F_mod::Float64=1.0)
     sim["car_share_network"] = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))
     sim["house_share_network"] = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))
     w_house_share = hh_infection_rate_pd
-    w_car_share = return_infection_weight(1.0, t_car_share, false, false)
+    w_car_share = F2F_mod*return_infection_weight(1.0, t_car_share, false, false)
 
     nr = collect(1:sim["Ntot"])
     nr_rand = shuffle(nr)
@@ -368,7 +369,7 @@ function init(Params::Dict, Inc::Array{Float64,1},
         HSparams["CarShareFactor"] = Params["CarShareFactor"]
     end
 
-    generate_car_share_and_house_share_graphs!(sim, HSparams)
+    generate_car_share_and_house_share_graphs!(sim, HSparams; F2F_mod = Params["F2F_mod"])
 
     apply_contact_mixing_params!(sim, Params)
 
@@ -410,73 +411,13 @@ function initialise(Params::Dict, PairParams::Dict, Incidence::Array{Float64,1},
     if Params["is_cohorts"]
         Nteams = [Params["NDteams"],Params["NLteams"],Params["NOteams"]]
         generate_cohort_graph!(sim, Nteams, Params["TeamTimes"],
-                               Params["TeamsOutside"], Params["TeamDistances"])
+                               Params["TeamsOutside"], Params["TeamDistances"]; 
+                               F2F_mod=Params["F2F_mod"], SS_mod=Params["Aerosol_mod"])
     end
 
     sim["NTypes"] = Ninftypes
 
     return sim
-end
-
-"""
-
-"""
-function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dict; 
-                          office_wfh::Bool = false)
-
-    at_work = zeros(Bool,sim["Ntot"])
-    NAs = zeros(Int64,sim["Ntot"])
-
-
-    if PairParams["is_driver_pairs"]
-        at_work_drivers, NAdrivers = get_pair_assignments!(sim, occ, Ncons, PairParams, 1)
-    else
-        at_work_drivers, NAdrivers = get_individual_assignments!(sim, occ, Ncons, 1)
-    end
-    at_work[at_work_drivers] .= true
-    NAs[at_work_drivers] .= NAdrivers
-
-
-    if PairParams["is_loader_pairs"]
-        at_work_loaders, NAloaders = get_pair_assignments!(sim, occ, Ncons, PairParams, 2)
-    else
-        at_work_loaders, NAloaders = get_individual_assignments!(sim, occ, Ncons, 2)
-    end
-    at_work[at_work_loaders] .= true
-    NAs[at_work_loaders] .= NAloaders
-
-    if office_wfh == false
-        at_work_office, NAoffice = get_individual_assignments!(sim, occ, Ncons, 3)
-        at_work[at_work_office] .= true
-        NAs[at_work_office] .= NAoffice
-    end
-
-
-    return at_work, NAs
-end
-
-"""
-
-"""
-function get_individual_assignments!(sim::Dict, occ::Float64, Ncons::Int64, job::Int)
-    #without pairs
-    in_job = sim["job_sorted_nodes"][job]
-    Nj = length(in_job)
-
-    available = in_job[sim["isolation_status"][in_job] .== false]
-    if length(available)/Nj > occ
-        w = sample(in_job, round(Int,occ*Nj), replace=false)
-    else
-        w = available
-    end
-    NW = length(w)
-    NAs = zeros(Int64, NW)
-    if job < 3
-        nw = 1:NW
-        NAs[nw] .= rand(Multinomial(Ncons,length(w)))
-    end
-
-    return w, NAs
 end
 
 """
@@ -552,9 +493,34 @@ end
 
 """
 
+"""
+function get_individual_assignments!(sim::Dict, occ::Float64, Ncons::Int64, job::Int)
+    #without pairs
+    in_job = sim["job_sorted_nodes"][job]
+    Nj = length(in_job)
+
+    available = in_job[sim["isolation_status"][in_job] .== false]
+    if length(available)/Nj > occ
+        w = sample(in_job, round(Int,occ*Nj), replace=false)
+    else
+        w = available
+    end
+    NW = length(w)
+    NAs = zeros(Int64, NW)
+    if job < 3
+        nw = 1:NW
+        NAs[nw] .= rand(Multinomial(Ncons,length(w)))
+    end
+
+    return w, NAs
+end
 
 """
-function get_pair_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dict, job::Int)
+
+
+"""
+function get_pair_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dict, 
+                               job::Int; F2F_mod::Float64 = 1.0)
     pairs = Array{Int64,2}(undef,2,0)
     NPassignments = Array{Int64,1}(undef,0)
 
@@ -562,19 +528,19 @@ function get_pair_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams
         pairs, NPassignments = select_pairs!(sim, occ, PairParams["fixed_driver_pairs"], job, Ncons)
 
         #component for delivery time
-        exp_per_assign = return_infection_weight(1.0,
+        exp_per_assign = F2F_mod*return_infection_weight(1.0,
             sim["contact_times"]["t_handling"] + sim["contact_times"]["t_doorstep"],
             true, false)
 
         #add component for cabin time
-        exp_per_assign += return_infection_weight(1.0, sim["contact_times"]["t_cabin"],
+        exp_per_assign += F2F_mod*return_infection_weight(1.0, sim["contact_times"]["t_cabin"],
                      PairParams["is_window_open"], false)
         add_cohort_to_graph!.(Ref(sim["driver_pair_network"]), pairs, NPassignments .* exp_per_assign)
     end
 
     if job == 2
         pairs, NPassignments = select_pairs!(sim, occ, PairParams["fixed_loader_pairs"], job, Ncons)
-        exp_per_assign = return_infection_weight(1.0,
+        exp_per_assign = F2F_mod*return_infection_weight(1.0,
             sim["contact_times"]["t_picking"], true, false)
         add_cohort_to_graph!.(Ref(sim["loader_pair_network"]), pairs, NPassignments .* exp_per_assign)
     end
@@ -583,6 +549,48 @@ function get_pair_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams
     return vcat(pairs...), vec(vcat(transpose(NPassignments),
             transpose(NPassignments)))
 end
+
+"""
+
+"""
+function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dict; 
+                          office_wfh::Bool = false, F2F_mod::Float64 = 1.0)
+
+    at_work = zeros(Bool,sim["Ntot"])
+    NAs = zeros(Int64,sim["Ntot"])
+
+
+    if PairParams["is_driver_pairs"]
+        at_work_drivers, NAdrivers = get_pair_assignments!(sim, occ, Ncons, PairParams, 1; F2F_mod=F2F_mod)
+    else
+        at_work_drivers, NAdrivers = get_individual_assignments!(sim, occ, Ncons, 1)
+    end
+    at_work[at_work_drivers] .= true
+    NAs[at_work_drivers] .= NAdrivers
+
+
+    if PairParams["is_loader_pairs"]
+        at_work_loaders, NAloaders = get_pair_assignments!(sim, occ, Ncons, PairParams, 2; F2F_mod=F2F_mod)
+    else
+        at_work_loaders, NAloaders = get_individual_assignments!(sim, occ, Ncons, 2)
+    end
+    at_work[at_work_loaders] .= true
+    NAs[at_work_loaders] .= NAloaders
+
+    if office_wfh == false
+        at_work_office, NAoffice = get_individual_assignments!(sim, occ, Ncons, 3)
+        at_work[at_work_office] .= true
+        NAs[at_work_office] .= NAoffice
+    end
+
+
+    return at_work, NAs
+end
+
+
+
+
+
 
 
 
@@ -699,7 +707,7 @@ function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
         AllLoaders::Array{Array{Int64,1},1}, InfLoaders::Array{Int64,1},
         InfLoaderPos::Array{Int64,1}, LoaderInfs::Array{Float64,1},
         PkgParams::Dict, NADrivers::Array{Int64,1}, NALoaders::Array{Int64,1},
-        modifiers::Dict)
+        modifiers::Dict; F2F_mod::Float64=1.0)
 
     #assume package order is clustered, not random
     LAorder = cumsum(NALoaders)
@@ -768,9 +776,9 @@ function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
         #InfDrivers contains infectious drivers
         #InfDriverPos contains their position in AllDrivers which is an array of arrays
         #NADrivers is the number of items assigned to each working group in AllDrivers
-        out_weight = return_infection_weight(1.0,
+        out_weight = F2F_mod*return_infection_weight(1.0,
                     sim["contact_times"]["t_doorstep"],true, true)
-        in_weight = return_infection_weight(1.0,
+        in_weight = F2F_mod*return_infection_weight(1.0,
                     sim["contact_times"]["t_doorstep"],false, true)
         doorstep_weight = modifiers["outdoor_contact_frac"] * out_weight
          + (1-modifiers["outdoor_contact_frac"]) * in_weight
@@ -826,7 +834,7 @@ end
 
 function get_package_and_customer_infections!(sim::Dict, NP::Int64,
            i_day::Int, PkgParams::Dict, PairParams::Dict,
-           NAs::Array{Int64,1}, CustModifiers::Dict)
+           NAs::Array{Int64,1}, CustModifiers::Dict; F2F_mod::Float64=1.0)
 
     CustInfProb = Array{Float64,1}(undef,0)
     DriverDelivering = Array{Array{Int64,1},1}(undef,0)
@@ -905,7 +913,8 @@ function get_package_and_customer_infections!(sim::Dict, NP::Int64,
         if length(alld) > 0 && length(alll) > 0
             CustInfProb, DriverDelivering =
             generate_infected_packages_and_customers!(sim, NP, alld, inf_drivers,
-                infd_pos, dinfs, alll, inf_loaders, infl_pos, linfs, PkgParams, NAD, NAL, CustModifiers)
+                infd_pos, dinfs, alll, inf_loaders, infl_pos, linfs, PkgParams, NAD, 
+                NAL, CustModifiers; F2F_mod=F2F_mod)
         end
     end
 
@@ -923,8 +932,8 @@ function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int)
         #nw = nr[sim["at_work"]]
         #nw in work
         #j0 = sim["job"][nw]          #j0 is jobs of in work
-        w_rand = return_infection_weight(x_rand, t_F2F_random, false, true)
-        wl_room = return_infection_weight(room_sep, t_lunch, false, false)
+        w_rand = Params["F2F_mod"]*return_infection_weight(x_rand, t_F2F_random, false, true)
+        wl_room = Params["Aerosol_mod"]*return_infection_weight(room_sep, t_lunch, false, false)
         for (k, i) in enumerate(inf)
             j = sim["job"][i]
             contacts = Array{Int64,1}(undef,0)
@@ -948,12 +957,12 @@ function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int)
 end
 
 function get_customer_introductions(sim::Dict, i_day::Int,
-                  NAssignments::Array{Int64,1}, modifiers::Dict)
+                  NAssignments::Array{Int64,1}, modifiers::Dict; F2F_mod::Float64=1.0)
     pinf = zeros(Float64, sim["N"][1])
 
-    out_weight = return_infection_weight(1.0,
+    out_weight = F2F_mod*return_infection_weight(1.0,
                     sim["contact_times"]["t_doorstep"],true,true)
-    in_weight = return_infection_weight(1.0,
+    in_weight = F2F_mod*return_infection_weight(1.0,
                     sim["contact_times"]["t_doorstep"],false,true)
 
     ppd = modifiers["outdoor_contact_frac"] * out_weight
@@ -1068,7 +1077,7 @@ function update_sim_summary_delivery_wp!(summary::Dict, sim::Dict, i_day::Int,
     summary["CustomersInfected"][i_day] = length(CinfDrivers)
 end
 
-function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Float64, Ncons::Int64, Params::Dict, PkgParams::Dict, PairParams::Dict, TestParams::Dict, cust_modifiers::Dict)
+function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Float64, Ncons::Int64, Params::Dict, PkgParams::Dict, PairParams::Dict, TestParams::Dict, cust_modifiers::Dict, TransModifiers::Dict)
 
     reset_daily_contact_networks!(sim)
     
@@ -1087,9 +1096,10 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
     #update_in_work
     if haskey(Params,"Office_WFH")
         at_work, NAssignments = get_assignments!(sim, Occ, Ncons, PairParams; 
-              office_wfh = Params["Office_WFH"])
+              office_wfh = Params["Office_WFH"], F2F_mod=Params["F2F_mod"])
     else
-        at_work, NAssignments = get_assignments!(sim, Occ, Ncons, PairParams)
+        at_work, NAssignments = get_assignments!(sim, Occ, Ncons, PairParams;
+              F2F_mod=Params["F2F_mod"])
     end
     update_in_work!(sim, at_work)
 
@@ -1097,7 +1107,7 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
 
     #introductions
     intro_pairs = get_introductions(sim, i_day)
-    intros = get_customer_introductions(sim, i_day, NAssignments, cust_modifiers)
+    intros = get_customer_introductions(sim, i_day, NAssignments, cust_modifiers; F2F_mod=Params["F2F_mod"])
     intro_pairs = hcat(intro_pairs,
         [-transpose(ones(Int64,length(intros))); transpose(intros);
         transpose(customer_contact*ones(Int64,length(intros)))])
@@ -1106,7 +1116,8 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
     generate_random_contact_networks!(sim, Params, i_day)
 
     #customer infections
-    CustInfProb, DriverDelivering = get_package_and_customer_infections!(sim, Ncons, i_day, PkgParams, PairParams, NAssignments, cust_modifiers)
+    CustInfProb, DriverDelivering = get_package_and_customer_infections!(sim, Ncons, i_day, 
+                    PkgParams, PairParams, NAssignments, cust_modifiers; F2F_mod=Params["F2F_mod"])
     bool_infd = (rand(length(CustInfProb)) .< CustInfProb)
     CinfDs = DriverDelivering[bool_infd]
 
@@ -1140,10 +1151,19 @@ function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay
         TestParams = DefaultTestParams
     end
 
+    #Transmission modifiers
+    TransModifiers = Dict("F2F_mod"=>1.0, "Aerosol_mod"=>1.0)
+    #modifies relative rate of F2F and aerosol transmission
+    for key in keys(TransModifiers)  #if given in params, change them
+        if haskey(Params,key)==false
+            Params[key] = TransModifiers[key]   #add to Params Dict if not already there
+        end
+    end
+    
+    
     sim = initialise(Params, PairParams, Incidence, Prevalence)
     sim_summary, i_day, Go = setup_delivery_wp_model!(sim, Params, TestParams, OccPerDay)
     #defaults
-
     IsolParams = Dict("PairIsolation"=>false, "CohortIsolation"=>false,
                       "CarShareIsolation"=>false, "HouseShareIsolation"=>false)
     for key in keys(IsolParams)
@@ -1159,11 +1179,11 @@ function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay
     #TODO
     CustModifiers = Dict("outdoor_contact_frac"=>1.0, "sanitise_frequency"=>0.0, "mask_prob"=>0.0)
     #edit these based on params
-
+    
     while Go && (i_day <= length(OccPerDay))
         infpairs = sim_loop_delivery_wp!(sim, sim_summary, i_day,
             OccPerDay[i_day], NPPerDay[i_day], Params, PkgParams,
-            PairParams, TestParams, CustModifiers)
+            PairParams, TestParams, CustModifiers, TransModifiers)
 
 
 
