@@ -423,51 +423,66 @@ end
 """
 
 """
+function generate_random_absences(available::Array{Int64,1}, AbsRate::Float64)
+    #random absences
+    away = randsubseq(available, AbsRate)
+    #return availables with aways filtered out
+    return available[.!in.(available,Ref(away))]
+end
+
+"""
+
+"""
 function select_pairs!(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64, Ncons::Int64)
-    TotPairs = Int64(sim["N"][job]/2)
     jobgroup = sim["job_sorted_nodes"][job]
-    is_available = .!(sim["isolation_status"][jobgroup])
-    available = jobgroup[is_available]
-    NJ = min(Int64(floor(0.5*length(available))*2), Int64(round(0.5*occ*sim["N"][job])*2))
-    NP = Int64(NJ/2)
+    #indices
+    ijobgroup = 1:length(jobgroup)
+    #remove indices of people isolating
+    iavailable = ijobgroup[.!(sim["isolation_status"][jobgroup])]
+    #remove indices for random absences
+    iavailable = generate_random_absences(iavailable, AbsRate + (1-occ))
+    #boolean array for who is available
+    is_available = zeros(Bool,length(jobgroup))
+    is_available[iavailable] .= true
+    #node numbers of who is available
+    available = jobgroup[iavailable]
+
+    #number of pairs to be formed
+    NP = Int64(floor(length(available)/2))
     pairs = zeros(Int64,(2,NP))
     if fixed_pairs
-        p1 = 1:2:sim["N"][job]
-        p2 = 2:2:sim["N"][job]
+        #total number of fixed pairs
+        TotPairs = Int64(floor(sim["N"][job]/2))
+        Njend = TotPairs*2
+        #indices of fixed pairs
+        p1 = 1:2:Njend
+        p2 = 2:2:Njend
+        #which pairs are available
         is_pair_available = is_available[p1] .* is_available[p2]
-        available_unpaired = jobgroup[vcat(p1[is_available[p1] .* (.!is_available[p2])],
-                            p2[is_available[p2] .* (.!is_available[p1])])]
         available_pairs = (1:TotPairs)[is_pair_available]
+        #who is available unpaired
+        available_unpaired = jobgroup[vcat(p1[is_available[p1] .* (.!is_available[p2])],
+                            p2[is_available[p2] .* (.!is_available[p1])],ijobgroup[ijobgroup .> Njend])]
+
+        #fill available fixed pairs first
         pairs_nos = vcat(transpose(jobgroup[p1]), transpose(jobgroup[p2]))
         apl = length(available_pairs)
-#         if length(available_unpaired) > 0
-#             print("Available unpaired: ", available_unpaired, '\n')
-#         end
-        if apl < NP
-            pairs[1,1:apl] = pairs_nos[1,available_pairs]
-            pairs[2,1:apl] = pairs_nos[2,available_pairs]
-            if length(available_unpaired) > 2*(NP - apl)
-                nos = sample(available_unpaired, 2*(NP - apl), replace = false)
-                pairs[1,(apl+1):NP] = nos[1:(NP-apl)]
-                pairs[2,(apl+1):NP] = nos[(NP-apl+1):(2*(NP - apl))]
-            elseif length(available_unpaired) > 1
-                #draw as many random pairs as are left, discard rest
-                NPleft = Int64(floor(length(available_unpaired)/2))
-                nos = sample(available_unpaired, 2*NPleft, replace = false)
-                pairs[1,(apl+1):(apl+NPleft)] = nos[1:NPleft]
-                pairs[2,(apl+1):(apl+NPleft)] = nos[(NPleft+1):(2*NPleft)]
-                trimpairs = pairs[:, 1:(apl + NPleft)]
-                pairs = pairs
-            end
-        else
-            pair_nos = sample(available_pairs, NP, replace=false)
-            pairs[1,:] = pairs_nos[1,pair_nos]
-            pairs[2,:] = pairs_nos[2,pair_nos]
+        pairs[1,1:apl] = pairs_nos[1,available_pairs]
+        pairs[2,1:apl] = pairs_nos[2,available_pairs]
+
+        #randomly allocate unpaired people
+        aups = length(available_unpaired)
+        NPUs = Int64(floor(aups/2))
+        if NPUs > 0
+            nos = sample(available_unpaired, 2*NPUs, replace = false)
+            pairs[1,(apl+1):(apl+NPUs)] = nos[1:NPUs]
+            pairs[2,(apl+1):(apl+NPUs)] = nos[(NPUs+1):(2*NPUs)]
         end
     else
-        nos = sample(available, NJ, replace=false)
+        #randomly allocate all pairs
+        nos = sample(available, 2*NP, replace=false)
         pairs[1,:] = nos[1:NP]
-        pairs[2,:] = nos[(NP+1):NJ]
+        pairs[2,:] = nos[(NP+1):2*NP]
     end
     if size(pairs,2) > 0
         pair_cons = rand(Multinomial(Ncons,size(pairs,2)))
@@ -494,17 +509,17 @@ end
 """
 
 """
-function get_individual_assignments!(sim::Dict, occ::Float64, Ncons::Int64, job::Int)
+function get_individual_assignments!(sim::Dict, occ::Float64, Ncons::Int64, 
+                                     job::Int, AbsRate::Float64)
     #without pairs
     in_job = sim["job_sorted_nodes"][job]
     Nj = length(in_job)
 
+    #covid absences
     available = in_job[sim["isolation_status"][in_job] .== false]
-    if length(available)/Nj > occ
-        w = sample(in_job, round(Int,occ*Nj), replace=false)
-    else
-        w = available
-    end
+    available = generate_random_absences(available, AbsRate + (1 - occ))
+    w = available
+
     NW = length(w)
     NAs = zeros(Int64, NW)
     if job < 3
