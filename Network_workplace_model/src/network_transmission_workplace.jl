@@ -440,56 +440,58 @@ function select_pairs!(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64, N
     #remove indices of people isolating
     iavailable = ijobgroup[.!(sim["isolation_status"][jobgroup])]
     #remove indices for random absences
-    iavailable = generate_random_absences(iavailable, AbsRate + (1-occ))
-    #boolean array for who is available
-    is_available = zeros(Bool,length(jobgroup))
-    is_available[iavailable] .= true
-    #node numbers of who is available
-    available = jobgroup[iavailable]
+    iavailable = generate_random_absences(iavailable, AbsRate)
+    if occ > 0.0
+        iavailable = generate_random_absences(iavailable, 1 - occ)
+        #boolean array for who is available
+        is_available = zeros(Bool,length(jobgroup))
+        is_available[iavailable] .= true
+        #node numbers of who is available
+        available = jobgroup[iavailable]
 
-    #number of pairs to be formed
-    NP = Int64(floor(length(available)/2))
-    pairs = zeros(Int64,(2,NP))
-    if fixed_pairs
-        #total number of fixed pairs
-        TotPairs = Int64(floor(sim["N"][job]/2))
-        Njend = TotPairs*2
-        #indices of fixed pairs
-        p1 = 1:2:Njend
-        p2 = 2:2:Njend
-        #which pairs are available
-        is_pair_available = is_available[p1] .* is_available[p2]
-        available_pairs = (1:TotPairs)[is_pair_available]
-        #who is available unpaired
-        available_unpaired = jobgroup[vcat(p1[is_available[p1] .* (.!is_available[p2])],
-                            p2[is_available[p2] .* (.!is_available[p1])],ijobgroup[ijobgroup .> Njend])]
+        #number of pairs to be formed
+        NP = Int64(floor(length(available)/2))
+        pairs = zeros(Int64,(2,NP))
+        if fixed_pairs
+            #total number of fixed pairs
+            TotPairs = Int64(floor(sim["N"][job]/2))
+            Njend = TotPairs*2
+            #indices of fixed pairs
+            p1 = 1:2:Njend
+            p2 = 2:2:Njend
+            #which pairs are available
+            is_pair_available = is_available[p1] .* is_available[p2]
+            available_pairs = (1:TotPairs)[is_pair_available]
+            #who is available unpaired
+            available_unpaired = jobgroup[vcat(p1[is_available[p1] .* (.!is_available[p2])],
+                                p2[is_available[p2] .* (.!is_available[p1])],ijobgroup[ijobgroup .> Njend])]
 
-        #fill available fixed pairs first
-        pairs_nos = vcat(transpose(jobgroup[p1]), transpose(jobgroup[p2]))
-        apl = length(available_pairs)
-        pairs[1,1:apl] = pairs_nos[1,available_pairs]
-        pairs[2,1:apl] = pairs_nos[2,available_pairs]
+            #fill available fixed pairs first
+            pairs_nos = vcat(transpose(jobgroup[p1]), transpose(jobgroup[p2]))
+            apl = length(available_pairs)
+            pairs[1,1:apl] = pairs_nos[1,available_pairs]
+            pairs[2,1:apl] = pairs_nos[2,available_pairs]
 
-        #randomly allocate unpaired people
-        aups = length(available_unpaired)
-        NPUs = Int64(floor(aups/2))
-        if NPUs > 0
-            nos = sample(available_unpaired, 2*NPUs, replace = false)
-            pairs[1,(apl+1):(apl+NPUs)] = nos[1:NPUs]
-            pairs[2,(apl+1):(apl+NPUs)] = nos[(NPUs+1):(2*NPUs)]
+            #randomly allocate unpaired people
+            aups = length(available_unpaired)
+            NPUs = Int64(floor(aups/2))
+            if NPUs > 0
+                nos = sample(available_unpaired, 2*NPUs, replace = false)
+                pairs[1,(apl+1):(apl+NPUs)] = nos[1:NPUs]
+                pairs[2,(apl+1):(apl+NPUs)] = nos[(NPUs+1):(2*NPUs)]
+            end
+        else
+            #randomly allocate all pairs
+            nos = sample(available, 2*NP, replace=false)
+            pairs[1,:] = nos[1:NP]
+            pairs[2,:] = nos[(NP+1):2*NP]
         end
-    else
-        #randomly allocate all pairs
-        nos = sample(available, 2*NP, replace=false)
-        pairs[1,:] = nos[1:NP]
-        pairs[2,:] = nos[(NP+1):2*NP]
-    end
-    if size(pairs,2) > 0
         pair_cons = rand(Multinomial(Ncons,size(pairs,2)))
-    else
+    else  
+        #nobody in work
+        pairs = Array{Int64,2}(undef,0)
         pair_cons = Array{Int64,1}(undef,0)
     end
-
     simple_pair_graph = MetaGraphs.MetaGraph(LightGraphs.SimpleGraph(sim["Ntot"]))
     NPfinal = size(pairs,2)
     pairs_out = Array{Array{Int64,1},1}(undef,NPfinal)
