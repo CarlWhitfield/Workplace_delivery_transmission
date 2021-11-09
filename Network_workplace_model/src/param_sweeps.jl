@@ -7,10 +7,10 @@ RandomAbsenceRate = 0.03
 ParcelOccPattern = [0.90,1.0,1.0,0.99,0.91,0.55,0.0]
 ParcelPkgPattern = [0.89,1.20,1.14,1.10,1.0,0.37,0.0]
 NPparcel = 3000
-NDparcel_def = Int64(round(mean(NPparcel*ParcelPkgPattern[1:6] ./ 
-                               (85.0*(1.0-RandomAbsenceRate)*ParcelOccPattern[1:6]))))
-NLparcel_def = Int64(round(0.5*NDparcel_def))
-NOparcel_def = Int64(round(0.3*NDparcel_def))
+NDparcel_def = Int64(ceil(mean(NPparcel*ParcelPkgPattern[1:6] ./ 
+                     (85.0*(1.0-RandomAbsenceRate)*ParcelOccPattern[1:6]))))
+NLparcel_def = Int64(ceil(0.5*NDparcel_def))
+NOparcel_def = Int64(ceil(0.3*NDparcel_def))
 NStaffparcel_def = NDparcel_def + NLparcel_def + NOparcel_def
 BasicParcelParams = Dict("ND"=>NDparcel_def, "NL"=>NLparcel_def, "NO"=>NOparcel_def, "NDteams"=>3, "NLteams"=>2,
         "NOteams"=>1, "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0,
@@ -30,10 +30,10 @@ BasicPkgParams = Dict("p_fomite_trans"=>0.0001, "Dtime"=>8, "Ltime"=>4, "PkgHlif
 BulkOccPattern = [0.82, 0.98, 0.97, 0.99, 1.0, 0.84, 0.47]
 BulkPkgPattern = [0.80, 0.94, 0.95, 0.94,  1.0, 0.81, 0.44]
 NPbulk = 210
-NDbulk_def = Int64(round(mean(NPbulk*BulkPkgPattern ./ 
+NDbulk_def = Int64(ceil(mean(NPbulk*BulkPkgPattern ./ 
                              (15.0*(1.0-RandomAbsenceRate)*BulkOccPattern))))
-NLbulk_def = Int64(round(0.8*NDbulk_def))
-NObulk_def = Int64(round(0.4*NDbulk_def))
+NLbulk_def = Int64(ceil(0.8*NDbulk_def))
+NObulk_def = Int64(ceil(0.4*NDbulk_def))
 NStaffbulk_def = NDbulk_def + NLbulk_def + NObulk_def
 BasicBulkParams = Dict("ND"=>NDbulk_def, "NL"=>NLbulk_def, "NO"=>NObulk_def, 
                        "NDteams"=>2, "NLteams"=>2, "NOteams"=>1,
