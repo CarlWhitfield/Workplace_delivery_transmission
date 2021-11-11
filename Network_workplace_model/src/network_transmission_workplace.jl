@@ -357,7 +357,7 @@ end
 
 """
 function init(Params::Dict, Inc::Array{Float64,1},
-        Prev::Array{Float64,1})
+        Prev::Array{Float64,1}, TransModifiers::Dict)
     sim = init_transmission_model([Params["ND"],Params["NL"],Params["NO"]],
             Params["Pisol"], Params["Psusc"], Inc, Prev)
     sim["contact_prob_mat"] = Params["p_contact"]*ones(3,3)
@@ -369,7 +369,8 @@ function init(Params::Dict, Inc::Array{Float64,1},
         HSparams["CarShareFactor"] = Params["CarShareFactor"]
     end
 
-    generate_car_share_and_house_share_graphs!(sim, HSparams; F2F_mod = Params["F2F_mod"])
+    generate_car_share_and_house_share_graphs!(sim, HSparams; 
+                             F2F_mod = TransModifiers["F2F_mod"])
 
     apply_contact_mixing_params!(sim, Params)
 
@@ -400,8 +401,8 @@ end
 
 """
 function initialise(Params::Dict, PairParams::Dict, Incidence::Array{Float64,1},
-                    Prevalence::Array{Float64,1})
-    sim = init(Params, Incidence, Prevalence)
+                    Prevalence::Array{Float64,1}, TransModifiers::Dict)
+    sim = init(Params, Incidence, Prevalence, TransModifiers)
     if PairParams["is_driver_pairs"] || PairParams["is_loader_pairs"]
         init_pairs!(sim,  PairParams)
         sim["contact_times"] = BulkTimesPerDelivery
@@ -411,8 +412,8 @@ function initialise(Params::Dict, PairParams::Dict, Incidence::Array{Float64,1},
     if Params["is_cohorts"]
         Nteams = [Params["NDteams"],Params["NLteams"],Params["NOteams"]]
         generate_cohort_graph!(sim, Nteams, Params["TeamTimes"],
-                               Params["TeamsOutside"], Params["TeamDistances"]; 
-                               F2F_mod=Params["F2F_mod"], SS_mod=Params["Aerosol_mod"])
+                Params["TeamsOutside"], Params["TeamDistances"]; 
+                F2F_mod=TransModifiers["F2F_mod"], SS_mod=TransModifiers["Aerosol_mod"])
     end
 
     sim["NTypes"] = Ninftypes
@@ -582,7 +583,8 @@ function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dic
 
 
     if PairParams["is_driver_pairs"]
-        at_work_drivers, NAdrivers = get_pair_assignments!(sim, occ, Ncons, PairParams, 1, AbsRate; F2F_mod=F2F_mod)
+        at_work_drivers, NAdrivers = get_pair_assignments!(sim, occ, Ncons, 
+                                                     PairParams, 1, AbsRate; F2F_mod=F2F_mod)
     else
         at_work_drivers, NAdrivers = get_individual_assignments!(sim, occ, Ncons, 1, AbsRate)
     end
@@ -591,7 +593,8 @@ function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dic
 
 
     if PairParams["is_loader_pairs"]
-        at_work_loaders, NAloaders = get_pair_assignments!(sim, occ, Ncons, PairParams, 2, AbsRate; F2F_mod=F2F_mod)
+        at_work_loaders, NAloaders = get_pair_assignments!(sim, occ, Ncons, 
+                                                     PairParams, 2, AbsRate; F2F_mod=F2F_mod)
     else
         at_work_loaders, NAloaders = get_individual_assignments!(sim, occ, Ncons, 2, AbsRate)
     end
@@ -942,7 +945,8 @@ function get_package_and_customer_infections!(sim::Dict, NP::Int64,
     return CustInfProb, DriverDelivering
 end
 
-function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int)
+function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int;
+                       F2F_mod::Float64, SS_mod::Float64)
     inf, inf_scales = get_infectivities(sim, i_day)
     #for those who are infectious and in work, generate contacts randomly with others
     #in work
@@ -953,8 +957,8 @@ function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int)
         #nw = nr[sim["at_work"]]
         #nw in work
         #j0 = sim["job"][nw]          #j0 is jobs of in work
-        w_rand = Params["F2F_mod"]*return_infection_weight(x_rand, t_F2F_random, false, true)
-        wl_room = Params["Aerosol_mod"]*return_infection_weight(room_sep, t_lunch, false, false)
+        w_rand = F2F_mod*return_infection_weight(x_rand, t_F2F_random, false, true)
+        wl_room = SS_mod*return_infection_weight(room_sep, t_lunch, false, false)
         for (k, i) in enumerate(inf)
             j = sim["job"][i]
             contacts = Array{Int64,1}(undef,0)
@@ -1117,11 +1121,11 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
     #update_in_work
     if haskey(Params,"Office_WFH")
         at_work, NAssignments = get_assignments!(sim, Occ, Ncons, PairParams; 
-              office_wfh = Params["Office_WFH"], F2F_mod=Params["F2F_mod"], 
+              office_wfh = Params["Office_WFH"], F2F_mod=TransModifiers["F2F_mod"], 
               AbsRate = Params["AbsenceRate"])
     else
         at_work, NAssignments = get_assignments!(sim, Occ, Ncons, PairParams;
-              F2F_mod=Params["F2F_mod"], AbsRate = Params["AbsenceRate"])
+              F2F_mod=TransModifiers["F2F_mod"], AbsRate = Params["AbsenceRate"])
     end
     update_in_work!(sim, at_work)
 
@@ -1129,17 +1133,19 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
 
     #introductions
     intro_pairs = get_introductions(sim, i_day)
-    intros = get_customer_introductions(sim, i_day, NAssignments, cust_modifiers; F2F_mod=Params["F2F_mod"])
+    intros = get_customer_introductions(sim, i_day, NAssignments, cust_modifiers; 
+                                        F2F_mod=TransModifiers["F2F_mod"])
     intro_pairs = hcat(intro_pairs,
         [-transpose(ones(Int64,length(intros))); transpose(intros);
         transpose(customer_contact*ones(Int64,length(intros)))])
 
     #get all contacts
-    generate_random_contact_networks!(sim, Params, i_day)
+    generate_random_contact_networks!(sim, Params, i_day; 
+        F2F_mod=TransModifiers["F2F_mod"], SS_mod=TransModifiers["Aerosol_mod"])
 
     #customer infections
     CustInfProb, DriverDelivering = get_package_and_customer_infections!(sim, Ncons, i_day, 
-                    PkgParams, PairParams, NAssignments, cust_modifiers; F2F_mod=Params["F2F_mod"])
+                    PkgParams, PairParams, NAssignments, cust_modifiers; F2F_mod=TransModifiers["F2F_mod"])
     bool_infd = (rand(length(CustInfProb)) .< CustInfProb)
     CinfDs = DriverDelivering[bool_infd]
 
@@ -1177,11 +1183,10 @@ function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay
     TransModifiers = Dict("F2F_mod"=>1.0, "Aerosol_mod"=>1.0)
     #modifies relative rate of F2F and aerosol transmission
     for key in keys(TransModifiers)  #if given in params, change them
-        if haskey(Params,key)==false
-            Params[key] = TransModifiers[key]   #add to Params Dict if not already there
+        if haskey(Params,key)==true
+            TransModifiers[key] = Params[key]   #add to Params Dict if not already there
         end
     end
-    
     
     sim = initialise(Params, PairParams, Incidence, Prevalence)
     sim_summary, i_day, Go = setup_delivery_wp_model!(sim, Params, TestParams, OccPerDay)
