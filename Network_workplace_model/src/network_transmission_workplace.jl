@@ -1187,7 +1187,7 @@ function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay
         end
     end
     
-    sim = initialise(Params, PairParams, Incidence, Prevalence)
+    sim = initialise(Params, PairParams, Incidence, Prevalence, TransModifiers)
     sim_summary, i_day, Go = setup_delivery_wp_model!(sim, Params, TestParams, OccPerDay)
     #defaults
     IsolParams = Dict("PairIsolation"=>false, "CohortIsolation"=>false,
