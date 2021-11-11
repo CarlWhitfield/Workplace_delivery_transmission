@@ -378,20 +378,22 @@ end
 
 function init_pairs!(sim::Dict, PairParams::Dict)
     sim["fixed_job_pairings"] = Array{Int64,2}(undef,2,0)
+    NDpairs = Int64(floor(sim["N"][1]/2))
+    NLpairs = Int64(floor(sim["N"][2]/2))
     if PairParams["is_driver_pairs"]
         sim["driver_pairs"] = Array{Int64,2}(undef,2,0)
         if PairParams["fixed_driver_pairs"]
             sim["fixed_job_pairings"] = hcat(sim["fixed_job_pairings"],
-                                        [transpose(collect(1:2:sim["N"][1]));
-                                         transpose(collect(2:2:sim["N"][1]))])
+                                        [transpose(collect(1:2:2*NDpairs));
+                                         transpose(collect(2:2:2*NDpairs))])
         end
     end
     if PairParams["is_loader_pairs"]
         sim["loader_pairs"] = Array{Int64,2}(undef,2,0)
         if PairParams["fixed_loader_pairs"]
             sim["fixed_job_pairings"] = hcat(sim["fixed_job_pairings"],
-                    [transpose(collect((sim["N"][1]+1):2:(sim["N"][1]+sim["N"][2])));
-                     transpose(collect((sim["N"][1]+2):2:(sim["N"][1]+sim["N"][2])))])
+                    [transpose(collect((sim["N"][1]+1):2:(sim["N"][1]+2*NLpairs)));
+                     transpose(collect((sim["N"][1]+2):2:(sim["N"][1]+2*NLpairs)))])
         end
     end
 end
