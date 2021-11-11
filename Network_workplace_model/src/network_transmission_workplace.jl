@@ -357,7 +357,7 @@ end
 
 """
 function init(Params::Dict, Inc::Array{Float64,1},
-        Prev::Array{Float64,1}, TransModifiers::Dict)
+        Prev::Array{Float64,1}; F2F_mod::Float64=1.0)
     sim = init_transmission_model([Params["ND"],Params["NL"],Params["NO"]],
             Params["Pisol"], Params["Psusc"], Inc, Prev)
     sim["contact_prob_mat"] = Params["p_contact"]*ones(3,3)
@@ -369,8 +369,7 @@ function init(Params::Dict, Inc::Array{Float64,1},
         HSparams["CarShareFactor"] = Params["CarShareFactor"]
     end
 
-    generate_car_share_and_house_share_graphs!(sim, HSparams; 
-                             F2F_mod = TransModifiers["F2F_mod"])
+    generate_car_share_and_house_share_graphs!(sim, HSparams; F2F_mod = F2F_mod)
 
     apply_contact_mixing_params!(sim, Params)
 
@@ -402,7 +401,7 @@ end
 """
 function initialise(Params::Dict, PairParams::Dict, Incidence::Array{Float64,1},
                     Prevalence::Array{Float64,1}, TransModifiers::Dict)
-    sim = init(Params, Incidence, Prevalence, TransModifiers)
+    sim = init(Params, Incidence, Prevalence; F2F_mod=TransModifiers["F2F_mod"])
     if PairParams["is_driver_pairs"] || PairParams["is_loader_pairs"]
         init_pairs!(sim,  PairParams)
         sim["contact_times"] = BulkTimesPerDelivery
