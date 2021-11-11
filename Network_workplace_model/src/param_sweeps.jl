@@ -943,6 +943,7 @@ function run_param_sweep_outbreak_wpsize_parcel(Nrepeats::Int = 10000)
     
     rel_size = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
 
+    df = DataFrame()
     PP = copy(BasicParcelParams)
     PkgP = copy(BasicPkgParams)
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
@@ -981,6 +982,7 @@ function run_param_sweep_outbreak_wpsize_pairs(Nrepeats::Int = 10000)
     PkgPattern = repeat(BulkPkgPattern,NweeksDefault)
     rel_size = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
 
+    df = DataFrame()
     PP = copy(BasicBulkParams)
     PairPs = copy(BasicPairParams)
     PkgP = copy(BasicPkgParams)
@@ -1010,7 +1012,6 @@ function run_param_sweep_outbreak_wpsize_pairs(Nrepeats::Int = 10000)
                 PairParams = PairParams, NPPerDay = NPvec, output=false)
             df = vcat(df,dfh)
         end
-        
     end
     
     CSV.write("wpsize_param_sweep_pairs.csv", df)
