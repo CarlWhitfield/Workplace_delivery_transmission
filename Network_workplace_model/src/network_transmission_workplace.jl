@@ -433,7 +433,8 @@ end
 """
 
 """
-function select_pairs!(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64, Ncons::Int64)
+function select_pairs!(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64, 
+                       Ncons::Int64, AbsRate::Float64)
     jobgroup = sim["job_sorted_nodes"][job]
     #indices
     ijobgroup = 1:length(jobgroup)
@@ -519,7 +520,8 @@ function get_individual_assignments!(sim::Dict, occ::Float64, Ncons::Int64,
 
     #covid absences
     available = in_job[sim["isolation_status"][in_job] .== false]
-    available = generate_random_absences(available, AbsRate + (1 - occ))
+    available = generate_random_absences(available, AbsRate)
+    available = generate_random_absences(available, 1 - occ)
     w = available
 
     NW = length(w)
@@ -537,12 +539,13 @@ end
 
 """
 function get_pair_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dict, 
-                               job::Int; F2F_mod::Float64 = 1.0)
+                               job::Int, AbsRate::Float64; F2F_mod::Float64 = 1.0)
     pairs = Array{Int64,2}(undef,2,0)
     NPassignments = Array{Int64,1}(undef,0)
 
     if job == 1
-        pairs, NPassignments = select_pairs!(sim, occ, PairParams["fixed_driver_pairs"], job, Ncons)
+        pairs, NPassignments = select_pairs!(sim, occ, PairParams["fixed_driver_pairs"],
+                                             job, Ncons, AbsRate)
 
         #component for delivery time
         exp_per_assign = F2F_mod*return_infection_weight(1.0,
@@ -556,7 +559,8 @@ function get_pair_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams
     end
 
     if job == 2
-        pairs, NPassignments = select_pairs!(sim, occ, PairParams["fixed_loader_pairs"], job, Ncons)
+        pairs, NPassignments = select_pairs!(sim, occ, PairParams["fixed_loader_pairs"], job, 
+                                             Ncons, AbsRate)
         exp_per_assign = F2F_mod*return_infection_weight(1.0,
             sim["contact_times"]["t_picking"], true, false)
         add_cohort_to_graph!.(Ref(sim["loader_pair_network"]), pairs, NPassignments .* exp_per_assign)
@@ -571,31 +575,31 @@ end
 
 """
 function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dict; 
-                          office_wfh::Bool = false, F2F_mod::Float64 = 1.0)
+                          office_wfh::Bool = false, F2F_mod::Float64 = 1.0, AbsRate::Float64 = 0)
 
     at_work = zeros(Bool,sim["Ntot"])
     NAs = zeros(Int64,sim["Ntot"])
 
 
     if PairParams["is_driver_pairs"]
-        at_work_drivers, NAdrivers = get_pair_assignments!(sim, occ, Ncons, PairParams, 1; F2F_mod=F2F_mod)
+        at_work_drivers, NAdrivers = get_pair_assignments!(sim, occ, Ncons, PairParams, 1, AbsRate; F2F_mod=F2F_mod)
     else
-        at_work_drivers, NAdrivers = get_individual_assignments!(sim, occ, Ncons, 1)
+        at_work_drivers, NAdrivers = get_individual_assignments!(sim, occ, Ncons, 1, AbsRate)
     end
     at_work[at_work_drivers] .= true
     NAs[at_work_drivers] .= NAdrivers
 
 
     if PairParams["is_loader_pairs"]
-        at_work_loaders, NAloaders = get_pair_assignments!(sim, occ, Ncons, PairParams, 2; F2F_mod=F2F_mod)
+        at_work_loaders, NAloaders = get_pair_assignments!(sim, occ, Ncons, PairParams, 2, AbsRate; F2F_mod=F2F_mod)
     else
-        at_work_loaders, NAloaders = get_individual_assignments!(sim, occ, Ncons, 2)
+        at_work_loaders, NAloaders = get_individual_assignments!(sim, occ, Ncons, 2, AbsRate)
     end
     at_work[at_work_loaders] .= true
     NAs[at_work_loaders] .= NAloaders
 
     if office_wfh == false
-        at_work_office, NAoffice = get_individual_assignments!(sim, occ, Ncons, 3)
+        at_work_office, NAoffice = get_individual_assignments!(sim, occ, Ncons, 3, AbsRate)
         at_work[at_work_office] .= true
         NAs[at_work_office] .= NAoffice
     end
@@ -1113,10 +1117,11 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
     #update_in_work
     if haskey(Params,"Office_WFH")
         at_work, NAssignments = get_assignments!(sim, Occ, Ncons, PairParams; 
-              office_wfh = Params["Office_WFH"], F2F_mod=Params["F2F_mod"])
+              office_wfh = Params["Office_WFH"], F2F_mod=Params["F2F_mod"], 
+              AbsRate = Params["AbsenceRate"])
     else
         at_work, NAssignments = get_assignments!(sim, Occ, Ncons, PairParams;
-              F2F_mod=Params["F2F_mod"])
+              F2F_mod=Params["F2F_mod"], AbsRate = Params["AbsenceRate"])
     end
     update_in_work!(sim, at_work)
 
