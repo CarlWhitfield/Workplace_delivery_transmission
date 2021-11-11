@@ -895,7 +895,6 @@ function run_param_sweep_outbreak_transmod_parcel(Nrepeats::Int = 10000)
     PkgP = copy(BasicPkgParams)
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgParams = Array{Dict{Any,Any},1}(undef,0)
-    NPvec = Int64.(round.(np*PkgPattern))
     for (i,f2f) in enumerate(F2F_mod)
         PP["F2F_mod"] = f2f
         for (j,ss) in enumerate(SS_mod)
