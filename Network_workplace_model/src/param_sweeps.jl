@@ -942,14 +942,14 @@ function run_param_sweep_outbreak_wpsize_parcel(Nrepeats::Int = 10000)
     OccPattern = repeat(ParcelOccPattern,NweeksDefault)
     PkgPattern = repeat(ParcelPkgPattern,NweeksDefault)
     
-    rel_size = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+    rel_size = 0.5 + 1.5.*(0:20)./20
 
     df = DataFrame()
     PP = copy(BasicParcelParams)
     PkgP = copy(BasicPkgParams)
-    ParamVec = Array{Dict{Any,Any},1}(undef,0)
-    PkgParams = Array{Dict{Any,Any},1}(undef,0)
     for (i,rs) in enumerate(rel_size)
+        ParamVec = Array{Dict{Any,Any},1}(undef,0)
+        PkgParams = Array{Dict{Any,Any},1}(undef,0)
         NPvec = Int64.(round.(rs*NPparcel*PkgPattern))
         PP["ND"] = Int64(round(rs*BasicParcelParams["ND"]))
         PP["NL"] = Int64(round(rs*BasicParcelParams["NL"]))
@@ -981,16 +981,16 @@ end
 function run_param_sweep_outbreak_wpsize_pairs(Nrepeats::Int = 10000)
     OccPattern = repeat(BulkOccPattern,NweeksDefault)
     PkgPattern = repeat(BulkPkgPattern,NweeksDefault)
-    rel_size = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+    rel_size = 0.5 + 2.5.*(0:20)./20
 
     df = DataFrame()
     PP = copy(BasicBulkParams)
     PairPs = copy(BasicPairParams)
     PkgP = copy(BasicPkgParams)
-    ParamVec = Array{Dict{Any,Any},1}(undef,0)
-    PkgParams = Array{Dict{Any,Any},1}(undef,0)
-    PairParams = Array{Dict{Any,Any},1}(undef,0)
     for (i,rs) in enumerate(rel_size)
+        ParamVec = Array{Dict{Any,Any},1}(undef,0)
+        PkgParams = Array{Dict{Any,Any},1}(undef,0)
+        PairParams = Array{Dict{Any,Any},1}(undef,0)
         NPvec = Int64.(round.(rs*NPbulk*PkgPattern))
         PP["ND"] = Int64(2*max(1,round(rs*BasicBulkParams["ND"]/2)))
         PP["NL"] = Int64(2*max(1,round(rs*BasicBulkParams["NL"]/2)))  #ensure even number
