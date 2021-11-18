@@ -942,7 +942,7 @@ function run_param_sweep_outbreak_wpsize_parcel(Nrepeats::Int = 10000)
     OccPattern = repeat(ParcelOccPattern,NweeksDefault)
     PkgPattern = repeat(ParcelPkgPattern,NweeksDefault)
     
-    rel_size = 0.5 + 1.5.*(0:20)./20
+    rel_size = 0.5 .+ 1.5.*(0:20)./20
 
     df = DataFrame()
     PP = copy(BasicParcelParams)
