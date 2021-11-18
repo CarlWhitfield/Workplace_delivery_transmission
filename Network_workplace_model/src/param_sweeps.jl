@@ -899,7 +899,7 @@ function run_param_sweep_outbreak_transmod_parcel(Nrepeats::Int = 10000)
     for (i,f2f) in enumerate(F2F_mod)
         PP["F2F_mod"] = f2f
         for (j,ss) in enumerate(SS_mod)
-            PP["SS_mod"] = ss
+            PP["Aerosol_mod"] = ss
             push!(ParamVec, PP)
             push!(PkgParams, PkgP)
         end
@@ -926,7 +926,7 @@ function run_param_sweep_outbreak_transmod_pairs(Nrepeats::Int = 10000)
     for (i,f2f) in enumerate(F2F_mod)
         PP["F2F_mod"] = f2f
         for (j,ss) in enumerate(SS_mod)
-            PP["SS_mod"] = ss
+            PP["Aerosol_mod"] = ss
             push!(ParamVec, PP)
             push!(PkgParams, PkgP)
             push!(PairParams, PairPs)

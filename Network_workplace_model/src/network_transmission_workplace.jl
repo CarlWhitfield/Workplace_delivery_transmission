@@ -1064,7 +1064,7 @@ function collate_networks(sim::Dict)
             end
         end
     end
-
+    
     return composite_graph
 end
 

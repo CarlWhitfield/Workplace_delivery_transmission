@@ -340,7 +340,7 @@ function get_network_infections(sim::Dict, i_day::Int)
         #get the edge weights (total transmission rate * contact time, can be multiple per edge)
         w = get_prop.(Ref(sim["contact_network"]),nin,nout,:weights)
         t = get_prop.(Ref(sim["contact_network"]),nin,nout,:types)
-
+    
         #fill and flatten all arrays so there is one entry for each entry
         nin_all = vcat(fill.(nin,length.(w))...)
         nout_all = vcat(fill.(nout,length.(w))...)
