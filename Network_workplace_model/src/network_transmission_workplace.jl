@@ -60,7 +60,7 @@ const room_sep = 1 - log(25*(BreathRate^2/(ACH*room_size + BreathRate)))/log(2)
 #around 10 hrs per day: 85 deliveries per day,
 const ParcelTimesPerDelivery = Dict("t_cabin"=>1.0/12.0,"t_doorstep"=>1/120.0, "t_handling"=>1/60.0,
                                 "t_picking"=>1.0/60.0)
-const BulkTimesPerDelivery = Dict("t_cabin"=>1.0/6.0,"t_doorstep"=>1.0/12.0, 
+const BulkTimesPerDelivery = Dict("t_cabin"=>1.0/6.0, "t_doorstep"=>1.0/12.0, 
                                   "t_handling"=>1.0/12.0, "t_picking"=>1.0/12.0)
 const job_labels = ["D","L","O"]
 const job_names = ["Drivers","Pickers","Other"]
@@ -1204,8 +1204,14 @@ function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay
     end
     create_isolation_network!(sim, IsolParams)
 
-    #TODO
+    #TODO -- sanitise frequency and mask prob not included yet
     CustModifiers = Dict("outdoor_contact_frac"=>1.0, "sanitise_frequency"=>0.0, "mask_prob"=>0.0)
+    for key in keys(CustModifiers)
+        if haskey(Params,key)
+            CustModifiers[key] = Params[key]
+        end
+    end
+    
     #edit these based on params
     
     while Go && (i_day <= length(OccPerDay))

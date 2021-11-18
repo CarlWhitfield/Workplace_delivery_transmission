@@ -16,9 +16,10 @@ BasicParcelParams = Dict("ND"=>NDparcel_def, "NL"=>NLparcel_def, "NO"=>NOparcel_
         "NOteams"=>1, "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0,
         "p_contact"=>(2.0/(NStaffparcel_def)), "tD"=>0.05,"phi"=>1.0, "InfInit"=>0,
         "SimType"=>Outbreak_sim, "TeamTimes"=>[0.25,1.0,1.0],
-        "TeamsOutside"=>[true,true,false], "TeamDistances"=>[1.0,1.0,1.0],
-         "HouseShareFactor"=>0.05, "CarShareFactor"=>0.05, "BreakContactProb"=>0.25,
-         "CohortChangeRate"=>(1.0/(NStaffparcel_def)), "AbsenceRate"=>RandomAbsenceRate)
+        "TeamsOutside"=>[false,false,false], "TeamDistances"=>[1.0,1.0,1.0],
+         "HouseShareFactor"=>0.1, "CarShareFactor"=>0.05, "BreakContactProb"=>0.25,
+         "CohortChangeRate"=>(1.0/(NStaffparcel_def)), "AbsenceRate"=>RandomAbsenceRate,
+         "CustomerOutdoorFrac"=>1.0)
 
 SpecDefault = 0.999 #Specificity
 BasicTestingParams = Dict("is_testing"=>true, "new_comply_prob"=>0.25,
@@ -40,11 +41,11 @@ BasicBulkParams = Dict("ND"=>NDbulk_def, "NL"=>NLbulk_def, "NO"=>NObulk_def,
                        "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0, 
                        "p_contact"=>(2.0/(NStaffbulk_def)),
                        "tD"=>0.1, "phi"=>1.0, "InfInit"=>0, "SimType"=>Outbreak_sim,
-                       "TeamTimes"=>[0.25,1.0,1.0], "TeamsOutside"=>[true,true,false],
-                       "TeamDistances"=>[1.0,1.0,1.0], "HouseShareFactor"=>0.05,
+                       "TeamTimes"=>[0.25,1.0,1.0], "TeamsOutside"=>[false,false,false],
+                       "TeamDistances"=>[1.0,1.0,1.0], "HouseShareFactor"=>0.1,
                        "CarShareFactor"=>0.05, "BreakContactProb"=>0.25, 
                        "CohortChangeRate"=>(1.0/(NStaffbulk_def)),
-                       "AbsenceRate"=>RandomAbsenceRate)
+                       "AbsenceRate"=>RandomAbsenceRate, "CustomerOutdoorFrac"=>0.5)
 BasicPairParams = Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
                   "fixed_driver_pairs"=>true, "fixed_loader_pairs"=>true,
                   "is_window_open"=>false, "PairIsolation"=>true)
