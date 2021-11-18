@@ -981,7 +981,7 @@ end
 function run_param_sweep_outbreak_wpsize_pairs(Nrepeats::Int = 10000)
     OccPattern = repeat(BulkOccPattern,NweeksDefault)
     PkgPattern = repeat(BulkPkgPattern,NweeksDefault)
-    rel_size = 0.5 + 2.5.*(0:20)./20
+    rel_size = 0.5 .+ 2.5.*(0:20)./20
 
     df = DataFrame()
     PP = copy(BasicBulkParams)
