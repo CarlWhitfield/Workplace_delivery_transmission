@@ -371,7 +371,7 @@ function run_testing_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     PkgPattern = repeat(ParcelPkgPattern,NweeksDefault)
     NPvec = Int64.(round.(NPparcel*PkgPattern))
 
-    NCP = [0.0,0.5,1.0]
+    Enforced = [false,true]
     Tperiod = 2:2:14
     Delay = [0,0,1,2]
     TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
@@ -382,15 +382,18 @@ function run_testing_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PP = copy(BasicParcelParams)
     PkgP = copy(BasicPkgParams)
-    for j in 1:3
+    for j in 1:2
         for tp in Tperiod
             for i in 1:length(TestType)
+                TPh = copy(BasicTestingParams)
                 push!(ParamVec, PP)
                 push!(PkgVec, PkgP)
-                push!(TestParamVec, Dict("is_testing"=>true, "new_comply_prob"=>NCP[j], "tperiod"=>tp,
-                      "protocol"=>TestType[i], "specificity"=>SpecDefault,
-                      "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
-
+                TPh["testing_enforced"] = Enforced[j]
+                TPh["tperiod"] = tp
+                TPh["protocol"] = TestType[i]
+                TPh["delay"] = Delay[i]
+                TPh["test_pause"] = Test_pause[i]
+                push!(TestParamVec, TPh)
             end
         end
     end
@@ -425,7 +428,7 @@ function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     PkgPattern = repeat(BulkPkgPattern,NweeksDefault)
     NPvec = Int64.(round.(NPbulk*PkgPattern))
 
-    NCP = [0.0,0.5,1.0]
+    Enforced = [false,true]
     Tperiod = 2:2:14
     Delay = [0,0,1,2]
     TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
@@ -438,14 +441,18 @@ function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     PP = copy(BasicBulkParams)
     PairPs = copy(BasicPairParams)
     PkgP = copy(BasicPkgParams)
-    for j in 1:3
+    for j in 1:2
         for tp in Tperiod
             for i in 1:length(TestType)
+                TPh = copy(BasicTestingParams)
                 push!(ParamVec, PP)
                 push!(PkgVec, PkgP)
-                push!(TestParamVec, Dict("is_testing"=>true, "new_comply_prob"=>NCP[j],
-                "tperiod"=>tp, "protocol"=>TestType[i], "specificity"=>SpecDefault,
-                      "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
+                TPh["testing_enforced"] = Enforced[j]
+                TPh["tperiod"] = tp
+                TPh["protocol"] = TestType[i]
+                TPh["delay"] = Delay[i]
+                TPh["test_pause"] = Test_pause[i]
+                push!(TestParamVec, TPh)
                 push!(PairParams, PairPs)
             end
         end
@@ -476,127 +483,127 @@ function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     return df
 end
 
-function run_testing_sweep_fixedprev_scenario_parcel(Prev_val::Float64, Nrepeats::Int = 10000)
-    NWeeks= 26
-    OccPattern = repeat(ParcelOccPattern,Nweeks)
-    PkgPattern = repeat(ParcelPkgPattern,Nweeks)
-    NPvec = Int64.(round.(NPparcel*PkgPattern))
+# function run_testing_sweep_fixedprev_scenario_parcel(Prev_val::Float64, Nrepeats::Int = 10000)
+#     NWeeks= 26
+#     OccPattern = repeat(ParcelOccPattern,Nweeks)
+#     PkgPattern = repeat(ParcelPkgPattern,Nweeks)
+#     NPvec = Int64.(round.(NPparcel*PkgPattern))
 
-    NCP = [0.0,0.5,1.0]
-    Tperiod = 2:2:14
-    Delay = [0,0,1,2]
-    TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
-    Test_pause = [21,90,90,90]
+#     NCP = [0.0,0.5,1.0]
+#     Tperiod = 2:2:14
+#     Delay = [0,0,1,2]
+#     TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
+#     Test_pause = [21,90,90,90]
 
-    Prev = Prev_val*ones(NWeeks*7)
-    Inc = Prev_val*ones(NWeeks*7)/7
+#     Prev = Prev_val*ones(NWeeks*7)
+#     Inc = Prev_val*ones(NWeeks*7)/7
 
-    ParamVec = Array{Dict{Any,Any},1}(undef,0)
-    TestParamVec = Array{Dict{Any,Any},1}(undef,0)
-    PkgVec = Array{Dict{Any,Any},1}(undef,0)
-    PP = copy(BasicParcelParams)
-    PkgP = copy(BasicPkgParams)
-    PP["SimType"] = Scenario_sim
-    for j in 1:3
-        for tp in Tperiod
-            for i in 1:length(TestType)
-                push!(ParamVec, PP)
-                push!(PkgVec, PkgP)
-                push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
-                      "protocol"=>TestType[i], "specificity"=>SpecDefault,
-                      "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
+#     ParamVec = Array{Dict{Any,Any},1}(undef,0)
+#     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+#     PkgVec = Array{Dict{Any,Any},1}(undef,0)
+#     PP = copy(BasicParcelParams)
+#     PkgP = copy(BasicPkgParams)
+#     PP["SimType"] = Scenario_sim
+#     for j in 1:3
+#         for tp in Tperiod
+#             for i in 1:length(TestType)
+#                 push!(ParamVec, PP)
+#                 push!(PkgVec, PkgP)
+#                 push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
+#                       "protocol"=>TestType[i], "specificity"=>SpecDefault,
+#                       "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
 
-            end
-        end
-    end
+#             end
+#         end
+#     end
 
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern;
-                  NPPerDay = NPvec, TestingParams=TestParamVec, output = false,
-                  PkgParams = PkgVec, Incidence = Inc, Prevalence = Prev)
+#     df = run_many_sims(ParamVec, Nrepeats, OccPattern;
+#                   NPPerDay = NPvec, TestingParams=TestParamVec, output = false,
+#                   PkgParams = PkgVec, Incidence = Inc, Prevalence = Prev)
 
-    #run baseline case
-    ParamVec = Array{Dict{Any,Any},1}(undef,0)
-    PkgVec = Array{Dict{Any,Any},1}(undef,0)
-    push!(PkgVec, PkgP)
-    push!(ParamVec, PP)
-    df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern;  NPPerDay = NPvec,
-                  PkgParams = PkgVec, output = false, Incidence = Inc, Prevalence = Prev)
+#     #run baseline case
+#     ParamVec = Array{Dict{Any,Any},1}(undef,0)
+#     PkgVec = Array{Dict{Any,Any},1}(undef,0)
+#     push!(PkgVec, PkgP)
+#     push!(ParamVec, PP)
+#     df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern;  NPPerDay = NPvec,
+#                   PkgParams = PkgVec, output = false, Incidence = Inc, Prevalence = Prev)
 
-    df2["new_comply_prob"] = zeros(nrow(df2))
-    df2["tperiod"] = zeros(nrow(df2))
-    df2["protocol"] = fill("No testing", nrow(df2))
-    df2["specificity"] = 0.999 * ones(nrow(df2))
-    df2["delay"] = zeros(nrow(df2))
-    df2["test_pause"] = zeros(nrow(df2))
-    dfout = vcat(df,df2)
+#     df2["new_comply_prob"] = zeros(nrow(df2))
+#     df2["tperiod"] = zeros(nrow(df2))
+#     df2["protocol"] = fill("No testing", nrow(df2))
+#     df2["specificity"] = 0.999 * ones(nrow(df2))
+#     df2["delay"] = zeros(nrow(df2))
+#     df2["test_pause"] = zeros(nrow(df2))
+#     dfout = vcat(df,df2)
 
-    CSV.write("testing_scenario_parcel_prev.csv", dfout)
+#     CSV.write("testing_scenario_parcel_prev.csv", dfout)
 
-    return df
-end
+#     return df
+# end
 
-function run_testing_sweep_fixedprev_scenario_pairs(Prev_val::Float64, Nrepeats::Int = 10000)
-    NWeeks= 26
-    OccPattern = repeat(BulkOccPattern,NWeeks)
-    PkgPattern = repeat(BulkPkgPattern,NWeeks)
-    NPvec = Int64.(round.(NPbulk*PkgPattern))
+# function run_testing_sweep_fixedprev_scenario_pairs(Prev_val::Float64, Nrepeats::Int = 10000)
+#     NWeeks= 26
+#     OccPattern = repeat(BulkOccPattern,NWeeks)
+#     PkgPattern = repeat(BulkPkgPattern,NWeeks)
+#     NPvec = Int64.(round.(NPbulk*PkgPattern))
 
-    NCP = [0.0,0.5,1.0]
-    Tperiod = 2:2:14
-    Delay = [0,0,1,2]
-    TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
-    Test_pause = [21,90,90,90]
+#     NCP = [0.0,0.5,1.0]
+#     Tperiod = 2:2:14
+#     Delay = [0,0,1,2]
+#     TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
+#     Test_pause = [21,90,90,90]
 
-    Prev = Prev_val*ones(NWeeks*7)
-    Inc = Prev_val*ones(NWeeks*7)/7
+#     Prev = Prev_val*ones(NWeeks*7)
+#     Inc = Prev_val*ones(NWeeks*7)/7
 
-    ParamVec = Array{Dict{Any,Any},1}(undef,0)
-    TestParamVec = Array{Dict{Any,Any},1}(undef,0)
-    PairParams = Array{Dict{Any,Any},1}(undef,0)
-    PkgVec = Array{Dict{Any,Any},1}(undef,0)
-    PP = copy(BasicBulkParams)
-    PP["SimType"] = Scenario_sim
-    PairPs = copy(BasicPairParams)
-    PkgP = copy(BasicPkgParams)
-    for j in 1:3
-        for tp in Tperiod
-            for i in 1:length(TestType)
-                push!(ParamVec, PP)
-                push!(PkgVec, PkgP)
-                push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
-                      "protocol"=>TestType[i], "specificity"=>SpecDefault,
-                      "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
-                push!(PairParams, PairPs)
-            end
-        end
-    end
+#     ParamVec = Array{Dict{Any,Any},1}(undef,0)
+#     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+#     PairParams = Array{Dict{Any,Any},1}(undef,0)
+#     PkgVec = Array{Dict{Any,Any},1}(undef,0)
+#     PP = copy(BasicBulkParams)
+#     PP["SimType"] = Scenario_sim
+#     PairPs = copy(BasicPairParams)
+#     PkgP = copy(BasicPkgParams)
+#     for j in 1:3
+#         for tp in Tperiod
+#             for i in 1:length(TestType)
+#                 push!(ParamVec, PP)
+#                 push!(PkgVec, PkgP)
+#                 push!(TestParamVec, Dict("new_comply_prob"=>NCP[j], "tperiod"=>tp,
+#                       "protocol"=>TestType[i], "specificity"=>SpecDefault,
+#                       "delay"=>Delay[i], "test_pause"=>Test_pause[i]))
+#                 push!(PairParams, PairPs)
+#             end
+#         end
+#     end
 
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern;  NPPerDay = NPvec,
-             TestingParams=TestParamVec,  PairParams = PairParams, output = false,
-             PkgParams = PkgVec, Incidence = Inc, Prevalence = Prev)
+#     df = run_many_sims(ParamVec, Nrepeats, OccPattern;  NPPerDay = NPvec,
+#              TestingParams=TestParamVec,  PairParams = PairParams, output = false,
+#              PkgParams = PkgVec, Incidence = Inc, Prevalence = Prev)
 
-    #run baseline case
-    ParamVec = Array{Dict{Any,Any},1}(undef,0)
-    PairParams = Array{Dict{Any,Any},1}(undef,0)
-    PkgVec = Array{Dict{Any,Any},1}(undef,0)
-    push!(PkgVec, PkgP)
-    push!(ParamVec, PP)
-    push!(PairParams, PairPs)
-    df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern;  NPPerDay = NPvec,
-             PkgParams = PkgVec, PairParams = PairParams, output = false, 
-             Incidence = Inc, Prevalence = Prev)
-    df2["new_comply_prob"] = zeros(nrow(df2))
-    df2["tperiod"] = zeros(nrow(df2))
-    df2["protocol"] = fill("No testing", nrow(df2))
-    df2["specificity"] = 0.999 * ones(nrow(df2))
-    df2["delay"] = zeros(nrow(df2))
-    df2["test_pause"] = zeros(nrow(df2))
-    df = vcat(df,df2)
+#     #run baseline case
+#     ParamVec = Array{Dict{Any,Any},1}(undef,0)
+#     PairParams = Array{Dict{Any,Any},1}(undef,0)
+#     PkgVec = Array{Dict{Any,Any},1}(undef,0)
+#     push!(PkgVec, PkgP)
+#     push!(ParamVec, PP)
+#     push!(PairParams, PairPs)
+#     df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern;  NPPerDay = NPvec,
+#              PkgParams = PkgVec, PairParams = PairParams, output = false, 
+#              Incidence = Inc, Prevalence = Prev)
+#     df2["new_comply_prob"] = zeros(nrow(df2))
+#     df2["tperiod"] = zeros(nrow(df2))
+#     df2["protocol"] = fill("No testing", nrow(df2))
+#     df2["specificity"] = 0.999 * ones(nrow(df2))
+#     df2["delay"] = zeros(nrow(df2))
+#     df2["test_pause"] = zeros(nrow(df2))
+#     df = vcat(df,df2)
 
-    fname = string("testing_scenario_pairs_prev",string(100*Prev_val),".csv")
-    CSV.write(fname, df)
-    return df
-end
+#     fname = string("testing_scenario_pairs_prev",string(100*Prev_val),".csv")
+#     CSV.write(fname, df)
+#     return df
+# end
 
 function run_param_sweep_outbreak_fomite_parcel(Nrepeats::Int = 10000)
     OccPattern = repeat(ParcelOccPattern,NweeksDefault)
@@ -686,13 +693,14 @@ function run_all_interventions_separately_scenario_parcel(Prev::Array{Float64,1}
     
     HHsharing = [0.05, 0.5]
     CarSharing = [0.05, 0.5]
-    TeamDistance = [1.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-    HouseShareIsolation = [false, false, true, false, false, false, false, false]
-    Office_WFH = [false, false, false, true, false, false, false, false]
-    Testing = [false, false, false, false, true, true, false, false]
-    NCPtest = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-    CarShareIsolation = [false, false, false, false, false, false, true, false]
-    CohortIsolation = [false, false, false, false, false, false, false, true]
+    Adherence = [0.5, 0.9, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+    TeamDistance = [1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    HouseShareIsolation = [false, false, false, true, false, false, false, false, false]
+    Office_WFH = [false, false, false, false, true, false, false, false, false]
+    Testing = [false, false, false, false, false, true, true, false, false]
+    EnforcedTesting = [false, false, false, false, false, false, true, false, false]
+    CarShareIsolation = [false, false, false, false, false, false, false, true, false]
+    CohortIsolation = [false, false, false, false, false, false, false, false, true]
     
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
@@ -704,6 +712,7 @@ function run_all_interventions_separately_scenario_parcel(Prev::Array{Float64,1}
             TP = copy(BasicTestingParams)
             PP["HouseShareFactor"] = HHsharing[j]
             PP["CarShareFactor"] = CarSharing[j]
+            PP["Pisol"] = Adherence[i]
             PP["Office_WFH"] = Office_WFH[i]
             PP["TeamDistances"] = fill(TeamDistance[i],3)
             PP["HouseShareIsolation"] = HouseShareIsolation[i]
@@ -711,7 +720,7 @@ function run_all_interventions_separately_scenario_parcel(Prev::Array{Float64,1}
             PP["CohortIsolation"] = CohortIsolation[i]
             PP["SimType"] = Scenario_sim
             TP["is_testing"] = Testing[i]
-            TP["new_comply_prob"] = NCPtest[i]
+            TP["testing_enforced"] = EnforcedTesting[i]
             push!(ParamVec, PP)
             push!(TestParamVec, TP)
             push!(PkgVec, PkgP)
@@ -735,16 +744,17 @@ function run_all_interventions_separately_scenario_pairs(Prev::Array{Float64,1},
     
     HHsharing = [0.05, 0.5]
     CarSharing = [0.05, 0.5]
-    TeamDistance = [1.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-    OpenWindows = [false, false, true, false, false, false, false, false, false, false]
-    HouseShareIsolation = [false, false, false, true, false, false, false, false, false, false]
-    FixedPairs = [false, false, false, false, true, false, false, false, false, false]
-    PairIsolation = [false, false, false, false, true, false, false, false, false, false]
-    Office_WFH = [false, false, false, false, false, true, false, false, false, false]
-    Testing = [false, false, false, false, false, false, true, true, false, false]
-    NCPtest = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-    CarShareIsolation = [false, false, false, false, false, false, false, false, true, false]
-    CohortIsolation = [false, false, false, false, false, false, false, false, false, true]
+    Adherence = [0.5, 0.9, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+    TeamDistance = [1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    OpenWindows = [false, false, false, true, false, false, false, false, false, false, false]
+    HouseShareIsolation = [false, false, false, false, true, false, false, false, false, false, false]
+    FixedPairs = [false, false, false, false, false, true, false, false, false, false, false]
+    PairIsolation = [false, false, false, false, false, true, false, false, false, false, false]
+    Office_WFH = [false, false, false, false, false, false, true, false, false, false, false]
+    Testing = [false, false, false, false, false, false, false, true, true, false, false]
+    EnforcedTesting = [false, false, false, false, false, false, false, false, true, false, false]
+    CarShareIsolation = [false, false, false, false, false, false, false, false, false, true, false]
+    CohortIsolation = [false, false, false, false, false, false, false, false, false, false, true]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
@@ -758,6 +768,7 @@ function run_all_interventions_separately_scenario_pairs(Prev::Array{Float64,1},
             PairPs = copy(BasicPairParams)
             PP["HouseShareFactor"] = HHsharing[j]
             PP["CarShareFactor"] = CarSharing[j]
+            PP["Pisol"] = Adherence[i]
             PP["Office_WFH"] = Office_WFH[i]
             PP["TeamDistances"] = fill(TeamDistance[i],3)
             PP["HouseShareIsolation"] = HouseShareIsolation[i]
@@ -765,7 +776,7 @@ function run_all_interventions_separately_scenario_pairs(Prev::Array{Float64,1},
             PP["CohortIsolation"] = CohortIsolation[i]
             PP["SimType"] = Scenario_sim
             TP["is_testing"] = Testing[i]
-            TP["new_comply_prob"] = NCPtest[i]
+            TP["testing_enforced"] = EnforcedTesting[i]
             PairPs["fixed_driver_pairs"] = FixedPairs[i]
             PairPs["fixed_loader_pairs"] = FixedPairs[i]
             PairPs["PairIsolation"] = PairIsolation[i]
@@ -795,13 +806,14 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
     
     HHsharing = [0.05, 0.5]
     CarSharing = [0.05, 0.5]
-    TeamDistance = [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
-    HouseShareIsolation = [false, false, true, true, true, true, true, true]
-    Office_WFH = [false, false, false, true, true, true, true, true]
-    Testing = [false, false, false, false, true, true, true, true]
-    NCPtest = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
-    CarShareIsolation = [false, false, false, false, false, false, true, true]
-    CohortIsolation = [false, false, false, false, false, false, false, true]
+    Adherence = [0.5, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9]
+    TeamDistance = [1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+    HouseShareIsolation = [false, false, false, true, true, true, true, true, true]
+    Office_WFH = [false, false, false, false, true, true, true, true, true]
+    Testing = [false, false, false, false, false, true, true, true, true]
+    EnforcedTesting = [false, false, false, false, false, false, true, true, true]
+    CarShareIsolation = [false, false, false, false, false, false, false, true, true]
+    CohortIsolation = [false, false, false, false, false, false, false, false, true]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
@@ -813,6 +825,7 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
             TP = copy(BasicTestingParams)
             PP["HouseShareFactor"] = HHsharing[j]
             PP["CarShareFactor"] = CarSharing[j]
+            PP["Pisol"] = Adherence[i]
             PP["Office_WFH"] = Office_WFH[i]
             PP["TeamDistances"] = fill(TeamDistance[i],3)
             PP["HouseShareIsolation"] = HouseShareIsolation[i]
@@ -820,7 +833,7 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
             PP["CohortIsolation"] = CohortIsolation[i]
             PP["SimType"] = Scenario_sim
             TP["is_testing"] = Testing[i]
-            TP["new_comply_prob"] = NCPtest[i]
+            TP["testing_enforced"] = EnforcedTesting[i]
             push!(ParamVec, PP)
             push!(TestParamVec, TP)
             push!(PkgVec, PkgP)
@@ -845,16 +858,17 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
     
     HHsharing = [0.05, 0.5]
     CarSharing = [0.05, 0.5]
-    TeamDistance = [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
-    OpenWindows = [false, false, true, true, true, true, true, true, true, true]
-    HouseShareIsolation = [false, false, false, true, true, true, true, true, true, true]
-    FixedPairs = [false, false, false, false, true, true, true, true, true, true]
-    PairIsolation = [false, false, false, false, true, true, true, true, true, true]
-    Office_WFH = [false, false, false, false, false, true, true, true, true, true]
-    Testing = [false, false, false, false, false, false, true, true, true, true]
-    NCPtest = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
-    CarShareIsolation = [false, false, false, false, false, false, false, false, true, true]
-    CohortIsolation = [false, false, false, false, false, false, false, false, false, true]
+    Adherence = [0.5, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9]
+    TeamDistance = [1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+    OpenWindows = [false, false, false, true, true, true, true, true, true, true, true]
+    HouseShareIsolation = [false, false, false, false, true, true, true, true, true, true, true]
+    FixedPairs = [false, false, false, false, false, true, true, true, true, true, true]
+    PairIsolation = [false, false, false, false, false, true, true, true, true, true, true]
+    Office_WFH = [false, false, false, false, false, false, true, true, true, true, true]
+    Testing = [false, false, false, false, false, false, false, true, true, true, true]
+    EnforcedTesting = [false, false, false, false, false, false, false, false, true, true, true]
+    CarShareIsolation = [false, false, false, false, false, false, false, false, false, true, true]
+    CohortIsolation = [false, false, false, false, false, false, false, false, false, false, true]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
@@ -866,6 +880,7 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
             PP = copy(BasicBulkParams)
             TP = copy(BasicTestingParams)
             PairPs = copy(BasicPairParams)
+            PP["Pisol"] = Adherence[i]
             PP["HouseShareFactor"] = HHsharing[j]
             PP["CarShareFactor"] = CarSharing[j]
             PP["Office_WFH"] = Office_WFH[i]
@@ -875,7 +890,7 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
             PP["CohortIsolation"] = CohortIsolation[i]
             PP["SimType"] = Scenario_sim
             TP["is_testing"] = Testing[i]
-            TP["new_comply_prob"] = NCPtest[i]
+            TP["testing_enforced"] = EnforcedTesting[i]
             PairPs["fixed_driver_pairs"] = FixedPairs[i]
             PairPs["fixed_loader_pairs"] = FixedPairs[i]
             PairPs["PairIsolation"] = PairIsolation[i]
