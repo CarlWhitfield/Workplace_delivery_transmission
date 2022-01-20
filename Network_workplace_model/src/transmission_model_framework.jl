@@ -7,7 +7,7 @@
 
 
 
-include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
+include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos_v2.jl")
 #include("../../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
 using LightGraphs
@@ -27,7 +27,7 @@ const Symp = 2
 const Recd = 3
 
 #Infection rates
-const infection_rate_F2F = 0.07   #infectivity of F2F interactions per hour = microCOVID approx
+infection_rate_F2F = 0.15   #infectivity of F2F interactions per hour = microCOVID approx
 const outside_factor = 0.2
 const no_talking_factor = 0.2
 const mask_factor_infector = 0.25
@@ -434,15 +434,18 @@ function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
         #get all non susceptibles
         nr = 1:sim["Ntot"]
         update_testing_state!(sim, i_day)
-        bool_can_be_tested = (sim["testing_paused"] .== false)
-
+        bool_will_do_test = (sim["testing_paused"] .== false) .* sim["will_isolate_with_test"]
         bool_exposed = (sim["infection_status"] .!= Susc)
         exposed = nr[bool_exposed]
         should_be_positive = exposed[length.(sim["test_pos_profiles"][exposed]) .>
                                        i_day .- sim["inf_time"][exposed]]
         pos_tests = zeros(Bool,sim["Ntot"])
         #false positives due to specificity
-        false_pos = randsubseq(nr[bool_can_be_tested],1-testing_params["specificity"])
+        FPprob = (1-testing_params["specificity"])
+        if testing_params["testing_enforced"] == false
+            FPprob = FPprob * (1 - testing_params["test_miss_prob"])
+        end
+        false_pos = randsubseq(nr[bool_will_do_test], FPprob)
         # print("Should test pos: ", should_be_positive,'\n')
         # print("False pos: ",false_pos,'\n')
         pos_tests[false_pos] .= true

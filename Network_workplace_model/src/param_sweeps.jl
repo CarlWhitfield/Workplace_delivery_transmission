@@ -13,17 +13,17 @@ NLparcel_def = Int64(ceil(0.5*NDparcel_def))
 NOparcel_def = Int64(ceil(0.3*NDparcel_def))
 NStaffparcel_def = NDparcel_def + NLparcel_def + NOparcel_def
 BasicParcelParams = Dict("ND"=>NDparcel_def, "NL"=>NLparcel_def, "NO"=>NOparcel_def, "NDteams"=>3, "NLteams"=>2,
-        "NOteams"=>1, "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0,
+        "NOteams"=>1, "is_cohorts"=>true, "Pisol"=>0.9, "Psusc"=>1.0,
         "p_contact"=>(2.0/(NStaffparcel_def)), "tD"=>0.05,"phi"=>1.0, "InfInit"=>0,
         "SimType"=>Outbreak_sim, "TeamTimes"=>[0.25,1.0,1.0],
         "TeamsOutside"=>[false,false,false], "TeamDistances"=>[1.0,1.0,1.0],
-         "HouseShareFactor"=>0.1, "CarShareFactor"=>0.05, "BreakContactProb"=>0.25,
+         "HouseShareFactor"=>0.05, "CarShareFactor"=>0.05, "BreakContactProb"=>0.25,
          "CohortChangeRate"=>(1.0/(NStaffparcel_def)), "AbsenceRate"=>RandomAbsenceRate,
          "CustomerOutdoorFrac"=>1.0)
 
 SpecDefault = 0.999 #Specificity
-BasicTestingParams = Dict("is_testing"=>true, "new_comply_prob"=>0.25,
-             "tperiod"=>3, "protocol"=>LFD_mass_protocol,
+BasicTestingParams = Dict("is_testing"=>true, "test_miss_prob"=>0.4,
+             "testing_enforced"=>false, "tperiod"=>3, "protocol"=>LFD_mass_protocol,
              "specificity"=>SpecDefault, "delay"=>0.0,
              "test_pause"=>21.0)
 BasicPkgParams = Dict("p_fomite_trans"=>0.0001, "Dtime"=>8, "Ltime"=>4, "PkgHlife"=>3)
@@ -38,11 +38,11 @@ NObulk_def = Int64(ceil(0.4*NDbulk_def))
 NStaffbulk_def = NDbulk_def + NLbulk_def + NObulk_def
 BasicBulkParams = Dict("ND"=>NDbulk_def, "NL"=>NLbulk_def, "NO"=>NObulk_def, 
                        "NDteams"=>2, "NLteams"=>2, "NOteams"=>1,
-                       "is_cohorts"=>true, "Pisol"=>0.5, "Psusc"=>1.0, 
+                       "is_cohorts"=>true, "Pisol"=>0.9, "Psusc"=>1.0, 
                        "p_contact"=>(2.0/(NStaffbulk_def)),
                        "tD"=>0.1, "phi"=>1.0, "InfInit"=>0, "SimType"=>Outbreak_sim,
                        "TeamTimes"=>[0.25,1.0,1.0], "TeamsOutside"=>[false,false,false],
-                       "TeamDistances"=>[1.0,1.0,1.0], "HouseShareFactor"=>0.1,
+                       "TeamDistances"=>[1.0,1.0,1.0], "HouseShareFactor"=>0.05,
                        "CarShareFactor"=>0.05, "BreakContactProb"=>0.25, 
                        "CohortChangeRate"=>(1.0/(NStaffbulk_def)),
                        "AbsenceRate"=>RandomAbsenceRate, "CustomerOutdoorFrac"=>0.5)
@@ -231,14 +231,14 @@ function run_presenteeism_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     NPvec = Int64.(round.(NPparcel*PkgPattern))
     #other params
     PIsol = 0.1:0.1:1.0
-    CohortDistance = [1.0,1.5,2.0,3.0]
+    HHsharing = [0.05, 0.2, 0.5, 1.0]
     CohortIsol = [true,false]
     II = [1,2,3]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PkgP = copy(BasicPkgParams)
-    for cd in CohortDistance
+    for hh in HHsharing
         for ii in II
             for pi in PIsol
                 for ci in CohortIsol
@@ -246,7 +246,7 @@ function run_presenteeism_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
                     PP["Pisol"] = pi
                     PP["InfInit"] = ii
                     PP["TeamDistances"] = [cd,cd,cd]
-                    PP["CohortIsolation"] = ci
+                    PP["HouseShareFactor"] = hh
                     push!(ParamVec, PP)
                     push!(PkgVec, PkgP)
                 end
@@ -265,7 +265,7 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     NPvec = Int64.(round.(NPbulk*PkgPattern))
     #other params
     PIsol = 0.1:0.1:1.0
-    CohortDistance = [1.0,1.5,2.0,3.0]
+    HHsharing = [0.05, 0.2, 0.5, 1.0]
     CohortIsol = [true,false]
     II = [1,2,3]
 
@@ -274,7 +274,7 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PairPs = copy(BasicPairParams)
     PkgP = copy(BasicPkgParams)
-    for cd in CohortDistance
+    for hh in HHsharing
         for ii in II
             for pi in PIsol
                 for ci in CohortIsol
@@ -282,7 +282,7 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
                     PP["Pisol"] = pi
                     PP["InfInit"] = ii
                     PP["TeamDistances"] = [cd,cd,cd]
-                    PP["CohortIsolation"] = ci
+                    PP["HouseShareFactor"] = hh
                     push!(ParamVec, PP)
                     push!(PairParams, PairPs)
                     push!(PkgVec, PkgP)
@@ -684,7 +684,8 @@ function run_all_interventions_separately_scenario_parcel(Prev::Array{Float64,1}
     PkgPattern = PkgPattern[1:length(Prev)]
     NPvec = Int64.(round.(Demand.*PkgPattern))
     
-    Pisol = [0.25, 0.75]
+    HHsharing = [0.05, 0.5]
+    CarSharing = [0.05, 0.5]
     TeamDistance = [1.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
     HouseShareIsolation = [false, false, true, false, false, false, false, false]
     Office_WFH = [false, false, false, true, false, false, false, false]
@@ -697,11 +698,12 @@ function run_all_interventions_separately_scenario_parcel(Prev::Array{Float64,1}
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PkgP = copy(BasicPkgParams)
-    for pi in Pisol
+    for j in 1:length(HHsharing)
         for i in 1:length(Office_WFH)
             PP = copy(BasicParcelParams)
             TP = copy(BasicTestingParams)
-            PP["Pisol"] = pi
+            PP["HouseShareFactor"] = HHsharing[j]
+            PP["CarShareFactor"] = CarSharing[j]
             PP["Office_WFH"] = Office_WFH[i]
             PP["TeamDistances"] = fill(TeamDistance[i],3)
             PP["HouseShareIsolation"] = HouseShareIsolation[i]
@@ -731,7 +733,8 @@ function run_all_interventions_separately_scenario_pairs(Prev::Array{Float64,1},
     PkgPattern = PkgPattern[1:length(Prev)]
     NPvec = Int64.(round.(Demand.*PkgPattern))
     
-    Pisol = [0.25, 0.75]
+    HHsharing = [0.05, 0.5]
+    CarSharing = [0.05, 0.5]
     TeamDistance = [1.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
     OpenWindows = [false, false, true, false, false, false, false, false, false, false]
     HouseShareIsolation = [false, false, false, true, false, false, false, false, false, false]
@@ -748,12 +751,13 @@ function run_all_interventions_separately_scenario_pairs(Prev::Array{Float64,1},
     PairParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PkgP = copy(BasicPkgParams)
-    for pi in Pisol
+    for j in 1:length(HHsharing)
         for i in 1:length(Office_WFH)
             PP = copy(BasicBulkParams)
             TP = copy(BasicTestingParams)
             PairPs = copy(BasicPairParams)
-            PP["Pisol"] = pi
+            PP["HouseShareFactor"] = HHsharing[j]
+            PP["CarShareFactor"] = CarSharing[j]
             PP["Office_WFH"] = Office_WFH[i]
             PP["TeamDistances"] = fill(TeamDistance[i],3)
             PP["HouseShareIsolation"] = HouseShareIsolation[i]
@@ -789,7 +793,8 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
     PkgPattern = PkgPattern[1:length(Prev)]
     NPvec = Int64.(round.(Demand.*PkgPattern))
     
-    Pisol = [0.25, 0.75]
+    HHsharing = [0.05, 0.5]
+    CarSharing = [0.05, 0.5]
     TeamDistance = [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
     HouseShareIsolation = [false, false, true, true, true, true, true, true]
     Office_WFH = [false, false, false, true, true, true, true, true]
@@ -802,11 +807,12 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PkgP = copy(BasicPkgParams)
-    for pi in Pisol
+    for j in 1:length(HHsharing)
         for i in 1:length(Office_WFH)
             PP = copy(BasicParcelParams)
             TP = copy(BasicTestingParams)
-            PP["Pisol"] = pi
+            PP["HouseShareFactor"] = HHsharing[j]
+            PP["CarShareFactor"] = CarSharing[j]
             PP["Office_WFH"] = Office_WFH[i]
             PP["TeamDistances"] = fill(TeamDistance[i],3)
             PP["HouseShareIsolation"] = HouseShareIsolation[i]
@@ -837,7 +843,8 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
     PkgPattern = PkgPattern[1:length(Prev)]
     NPvec = Int64.(round.(Demand.*PkgPattern))
     
-    Pisol = [0.25, 0.75]
+    HHsharing = [0.05, 0.5]
+    CarSharing = [0.05, 0.5]
     TeamDistance = [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
     OpenWindows = [false, false, true, true, true, true, true, true, true, true]
     HouseShareIsolation = [false, false, false, true, true, true, true, true, true, true]
@@ -854,12 +861,13 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
     PairParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PkgP = copy(BasicPkgParams)
-    for pi in Pisol
+    for j in 1:length(HHsharing)
         for i in 1:length(Office_WFH)
             PP = copy(BasicBulkParams)
             TP = copy(BasicTestingParams)
             PairPs = copy(BasicPairParams)
-            PP["Pisol"] = pi
+            PP["HouseShareFactor"] = HHsharing[j]
+            PP["CarShareFactor"] = CarSharing[j]
             PP["Office_WFH"] = Office_WFH[i]
             PP["TeamDistances"] = fill(TeamDistance[i],3)
             PP["HouseShareIsolation"] = HouseShareIsolation[i]
@@ -889,8 +897,8 @@ function run_param_sweep_outbreak_transmod_parcel(Nrepeats::Int = 10000)
     OccPattern = repeat(ParcelOccPattern,NweeksDefault)
     PkgPattern = repeat(ParcelPkgPattern,NweeksDefault)
     NPvec = Int64.(round.(NPparcel*PkgPattern))
-    F2F_mod = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
-    SS_mod = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+    F2F_mod = [0.3, 0.5, 1.0, 1.5, 2.0, 2.5]
+    SS_mod = [0.3, 0.5, 1.0, 1.5, 2.0, 2.5]
 
     PP = copy(BasicParcelParams)
     PkgP = copy(BasicPkgParams)
