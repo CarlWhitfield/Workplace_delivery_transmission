@@ -232,7 +232,6 @@ function run_presenteeism_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     #other params
     PIsol = 0.1:0.1:1.0
     HHsharing = [0.05, 0.2, 0.5, 1.0]
-    CohortIsol = [true,false]
     II = [1,2,3]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
@@ -241,15 +240,12 @@ function run_presenteeism_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     for hh in HHsharing
         for ii in II
             for pi in PIsol
-                for ci in CohortIsol
-                    PP = copy(BasicParcelParams)
-                    PP["Pisol"] = pi
-                    PP["InfInit"] = ii
-                    PP["TeamDistances"] = [cd,cd,cd]
-                    PP["HouseShareFactor"] = hh
-                    push!(ParamVec, PP)
-                    push!(PkgVec, PkgP)
-                end
+                PP = copy(BasicParcelParams)
+                PP["Pisol"] = pi
+                PP["InfInit"] = ii
+                PP["HouseShareFactor"] = hh
+                push!(ParamVec, PP)
+                push!(PkgVec, PkgP)
             end
         end
     end
@@ -266,7 +262,6 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     #other params
     PIsol = 0.1:0.1:1.0
     HHsharing = [0.05, 0.2, 0.5, 1.0]
-    CohortIsol = [true,false]
     II = [1,2,3]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
@@ -277,16 +272,13 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     for hh in HHsharing
         for ii in II
             for pi in PIsol
-                for ci in CohortIsol
-                    PP = copy(BasicBulkParams)
-                    PP["Pisol"] = pi
-                    PP["InfInit"] = ii
-                    PP["TeamDistances"] = [cd,cd,cd]
-                    PP["HouseShareFactor"] = hh
-                    push!(ParamVec, PP)
-                    push!(PairParams, PairPs)
-                    push!(PkgVec, PkgP)
-                end
+                PP = copy(BasicBulkParams)
+                PP["Pisol"] = pi
+                PP["InfInit"] = ii
+                PP["HouseShareFactor"] = hh
+                push!(ParamVec, PP)
+                push!(PairParams, PairPs)
+                push!(PkgVec, PkgP)
             end
         end
     end
