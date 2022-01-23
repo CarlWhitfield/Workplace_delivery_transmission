@@ -798,16 +798,19 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
     PkgPattern = PkgPattern[1:length(Prev)]
     NPvec = Int64.(round.(Demand.*PkgPattern))
     
-    HHsharing = [0.05, 0.5]
-    CarSharing = [0.05, 0.5]
-    Adherence = [0.5, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9]
-    TeamDistance = [1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
-    HouseShareIsolation = [false, false, false, true, true, true, true, true, true]
-    Office_WFH = [false, false, false, false, true, true, true, true, true]
-    Testing = [false, false, false, false, false, true, true, true, true]
-    EnforcedTesting = [false, false, false, false, false, false, true, true, true]
-    CarShareIsolation = [false, false, false, false, false, false, false, true, true]
-    CohortIsolation = [false, false, false, false, false, false, false, false, true]
+    #Non-isolation measures
+    TeamDistance = [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+    NDteams = [3, 3, 6, 6, 6, 6, 6, 6, 6, 6]
+    NLteams = [2, 2, 4, 4, 4, 4, 4, 4, 4, 4]
+    NOteams = [1, 1, 3, 3, 3, 3, 3, 3, 3, 3]
+    Office_WFH = [false, false, false, true, true, true, true, true, true, true]
+    #isolation measures
+    Adherence = [0.5, 0.5, 0.5, 0.5, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9]
+    HouseShareIsolation = [false, false, false, false, false, true, true, true, true, true]
+    Testing = [false, false, false, false, false, false, true, true, true, true]
+    EnforcedTesting = [false, false, false, false, false, false, false, true, true, true]
+    CarShareIsolation = [false, false, false, false, false, false, false, false, true, true]
+    CohortIsolation = [false, false, false, false, false, false, false, false, false, true]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
@@ -838,6 +841,62 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
                   Incidence = Inc, Prevalence = Prev, PkgParams = PkgVec, 
                   filename="all_interventions_cumul_parcel.csv")
     return df
+end
+
+function run_all_interventions_variableprev_scenario_parcel_isol_first(Prev::Array{Float64,1},
+            Inc::Array{Float64,1}, Demand::Array{Float64,1}, Nrepeats::Int = 10000)
+    NWeeks = Int64(ceil(length(Prev)/7))
+    OccPattern = repeat(ParcelOccPattern,NWeeks)
+    PkgPattern = repeat(ParcelPkgPattern,NWeeks)
+    OccPattern = OccPattern[1:length(Prev)]
+    PkgPattern = PkgPattern[1:length(Prev)]
+    NPvec = Int64.(round.(Demand.*PkgPattern))
+    
+    #isolation measures
+    Adherence = [0.5, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9]
+    HouseShareIsolation = [false, false, true, true, true, true, true, true, true, true]
+    Testing = [false, false, false, true, true, true, true, true, true, true]
+    EnforcedTesting = [false, false, false, false, true, true, true, true, true, true]
+    CarShareIsolation = [false, false, false, false, false, true, true, true, true, true]
+    CohortIsolation = [false, false, false, false, false, false, true, true, true, true]
+    
+    #Non-isolation measures
+    TeamDistance = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0]
+    NDteams = [3, 3, 3, 3, 3, 3, 3, 3, 6, 6]
+    NLteams = [2, 2, 2, 2, 2, 2, 2, 2, 4, 4]
+    NOteams = [1, 1, 1, 1, 1, 1, 1, 1, 3, 3]
+    Office_WFH = [false, false, false, false, false, false, false, false, false, true]
+    
+
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgP = copy(BasicPkgParams)
+    for j in 1:length(HHsharing)
+        for i in 1:length(Office_WFH)
+            PP = copy(BasicParcelParams)
+            TP = copy(BasicTestingParams)
+            PP["HouseShareFactor"] = HHsharing[j]
+            PP["CarShareFactor"] = CarSharing[j]
+            PP["Pisol"] = Adherence[i]
+            PP["Office_WFH"] = Office_WFH[i]
+            PP["TeamDistances"] = fill(TeamDistance[i],3)
+            PP["HouseShareIsolation"] = HouseShareIsolation[i]
+            PP["CarShareIsolation"] = CarShareIsolation[i]
+            PP["CohortIsolation"] = CohortIsolation[i]
+            PP["SimType"] = Scenario_sim
+            TP["is_testing"] = Testing[i]
+            TP["testing_enforced"] = EnforcedTesting[i]
+            push!(ParamVec, PP)
+            push!(TestParamVec, TP)
+            push!(PkgVec, PkgP)
+        end
+    end
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern;
+                  NPPerDay = NPvec, TestingParams=TestParamVec,
+                  Incidence = Inc, Prevalence = Prev, PkgParams = PkgVec, 
+                  filename="all_interventions_cumul_parcel_isolfirst.csv")
+    return df
 
 end
 
@@ -850,19 +909,17 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
     PkgPattern = PkgPattern[1:length(Prev)]
     NPvec = Int64.(round.(Demand.*PkgPattern))
     
-    HHsharing = [0.05, 0.5]
-    CarSharing = [0.05, 0.5]
-    Adherence = [0.5, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9]
-    TeamDistance = [1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
-    OpenWindows = [false, false, false, true, true, true, true, true, true, true, true]
-    HouseShareIsolation = [false, false, false, false, true, true, true, true, true, true, true]
-    FixedPairs = [false, false, false, false, false, true, true, true, true, true, true]
-    PairIsolation = [false, false, false, false, false, true, true, true, true, true, true]
-    Office_WFH = [false, false, false, false, false, false, true, true, true, true, true]
-    Testing = [false, false, false, false, false, false, false, true, true, true, true]
-    EnforcedTesting = [false, false, false, false, false, false, false, false, true, true, true]
-    CarShareIsolation = [false, false, false, false, false, false, false, false, false, true, true]
-    CohortIsolation = [false, false, false, false, false, false, false, false, false, false, true]
+    #Non-isolation measures
+    TeamDistance = [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+    Office_WFH = [false, false, true, true, true, true, true, true, true, true]
+    #isolation measures
+    Adherence = [0.5, 0.5, 0.5, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9]
+    HouseShareIsolation = [false, false, false, false, true, true, true, true, true, true]
+    FixedPairs = [false, false, false, false, false, true, true, true, true, true]
+    Testing = [false, false, false, false, false, false, true, true, true, true]
+    EnforcedTesting = [false, false, false, false, false, false, false, true, true, true]
+    CarShareIsolation = [false, false, false, false, false, false, false, false, true, true]
+    CohortIsolation = [false, false, false, false, false, false, false, false, false, true]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
@@ -887,7 +944,66 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
             TP["testing_enforced"] = EnforcedTesting[i]
             PairPs["fixed_driver_pairs"] = FixedPairs[i]
             PairPs["fixed_loader_pairs"] = FixedPairs[i]
-            PairPs["PairIsolation"] = PairIsolation[i]
+            PairPs["PairIsolation"] = FixedPairs[i]
+            push!(ParamVec, PP)
+            push!(TestParamVec, TP)
+            push!(PairParamVec, PairPs)
+            push!(PkgVec, PkgP)
+        end
+    end
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern;
+                  NPPerDay = NPvec, TestingParams=TestParamVec,
+                  Incidence = Inc, Prevalence = Prev,
+                  PairParams = PairParamVec, PkgParams = PkgVec, 
+                  filename="all_interventions_cumul_pairs.csv")
+    return df
+end
+
+function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1},
+             Inc::Array{Float64,1}, Demand::Array{Float64,1}, Nrepeats::Int = 10000)
+    NWeeks = Int64(ceil(length(Prev)/7))
+    OccPattern = repeat(BulkOccPattern,NWeeks)
+    PkgPattern = repeat(BulkPkgPattern,NWeeks)
+    OccPattern = OccPattern[1:length(Prev)]
+    PkgPattern = PkgPattern[1:length(Prev)]
+    NPvec = Int64.(round.(Demand.*PkgPattern))
+    
+    #isolation measures
+    Adherence = [0.5, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9]
+    HouseShareIsolation = [false, false, true, true, true, true, true, true, true, true]
+    FixedPairs = [false, false, false, true, true, true, true, true, true, true]
+    Testing = [false, false, false, false, true, true, true, true, true, true]
+    EnforcedTesting = [false, false, false, false, false, true, true, true, true, true]
+    CarShareIsolation = [false, false, false, false, false, false, true, true, true, true]
+    CohortIsolation = [false, false, false, false, false, false, false, true, true, true]
+    #Non-isolation measures
+    TeamDistance = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0]
+    Office_WFH = [false, false, false, false, false, false, false, false, false, true]
+
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PairParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    PkgP = copy(BasicPkgParams)
+    for j in 1:length(HHsharing)
+        for i in 1:length(Office_WFH)
+            PP = copy(BasicBulkParams)
+            TP = copy(BasicTestingParams)
+            PairPs = copy(BasicPairParams)
+            PP["Pisol"] = Adherence[i]
+            PP["HouseShareFactor"] = HHsharing[j]
+            PP["CarShareFactor"] = CarSharing[j]
+            PP["Office_WFH"] = Office_WFH[i]
+            PP["TeamDistances"] = fill(TeamDistance[i],3)
+            PP["HouseShareIsolation"] = HouseShareIsolation[i]
+            PP["CarShareIsolation"] = CarShareIsolation[i]
+            PP["CohortIsolation"] = CohortIsolation[i]
+            PP["SimType"] = Scenario_sim
+            TP["is_testing"] = Testing[i]
+            TP["testing_enforced"] = EnforcedTesting[i]
+            PairPs["fixed_driver_pairs"] = FixedPairs[i]
+            PairPs["fixed_loader_pairs"] = FixedPairs[i]
+            PairPs["PairIsolation"] = FixedPairs[i]
             push!(ParamVec, PP)
             push!(TestParamVec, TP)
             push!(PairParamVec, PairPs)
