@@ -818,25 +818,23 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PkgP = copy(BasicPkgParams)
-    for j in 1:length(HHsharing)
-        for i in 1:length(Office_WFH)
-            PP = copy(BasicParcelParams)
-            TP = copy(BasicTestingParams)
-            PP["HouseShareFactor"] = HHsharing[j]
-            PP["CarShareFactor"] = CarSharing[j]
-            PP["Pisol"] = Adherence[i]
-            PP["Office_WFH"] = Office_WFH[i]
-            PP["TeamDistances"] = fill(TeamDistance[i],3)
-            PP["HouseShareIsolation"] = HouseShareIsolation[i]
-            PP["CarShareIsolation"] = CarShareIsolation[i]
-            PP["CohortIsolation"] = CohortIsolation[i]
-            PP["SimType"] = Scenario_sim
-            TP["is_testing"] = Testing[i]
-            TP["testing_enforced"] = EnforcedTesting[i]
-            push!(ParamVec, PP)
-            push!(TestParamVec, TP)
-            push!(PkgVec, PkgP)
-        end
+    for i in 1:length(Office_WFH)
+        PP = copy(BasicParcelParams)
+        TP = copy(BasicTestingParams)
+        PP["HouseShareFactor"] = HHsharing[j]
+        PP["CarShareFactor"] = CarSharing[j]
+        PP["Pisol"] = Adherence[i]
+        PP["Office_WFH"] = Office_WFH[i]
+        PP["TeamDistances"] = fill(TeamDistance[i],3)
+        PP["HouseShareIsolation"] = HouseShareIsolation[i]
+        PP["CarShareIsolation"] = CarShareIsolation[i]
+        PP["CohortIsolation"] = CohortIsolation[i]
+        PP["SimType"] = Scenario_sim
+        TP["is_testing"] = Testing[i]
+        TP["testing_enforced"] = EnforcedTesting[i]
+        push!(ParamVec, PP)
+        push!(TestParamVec, TP)
+        push!(PkgVec, PkgP)
     end
     df = run_many_sims(ParamVec, Nrepeats, OccPattern;
                   NPPerDay = NPvec, TestingParams=TestParamVec,
@@ -874,25 +872,23 @@ function run_all_interventions_variableprev_scenario_parcel_isol_first(Prev::Arr
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PkgP = copy(BasicPkgParams)
-    for j in 1:length(HHsharing)
-        for i in 1:length(Office_WFH)
-            PP = copy(BasicParcelParams)
-            TP = copy(BasicTestingParams)
-            PP["HouseShareFactor"] = HHsharing[j]
-            PP["CarShareFactor"] = CarSharing[j]
-            PP["Pisol"] = Adherence[i]
-            PP["Office_WFH"] = Office_WFH[i]
-            PP["TeamDistances"] = fill(TeamDistance[i],3)
-            PP["HouseShareIsolation"] = HouseShareIsolation[i]
-            PP["CarShareIsolation"] = CarShareIsolation[i]
-            PP["CohortIsolation"] = CohortIsolation[i]
-            PP["SimType"] = Scenario_sim
-            TP["is_testing"] = Testing[i]
-            TP["testing_enforced"] = EnforcedTesting[i]
-            push!(ParamVec, PP)
-            push!(TestParamVec, TP)
-            push!(PkgVec, PkgP)
-        end
+    for i in 1:length(Office_WFH)
+        PP = copy(BasicParcelParams)
+        TP = copy(BasicTestingParams)
+        PP["HouseShareFactor"] = HHsharing[j]
+        PP["CarShareFactor"] = CarSharing[j]
+        PP["Pisol"] = Adherence[i]
+        PP["Office_WFH"] = Office_WFH[i]
+        PP["TeamDistances"] = fill(TeamDistance[i],3)
+        PP["HouseShareIsolation"] = HouseShareIsolation[i]
+        PP["CarShareIsolation"] = CarShareIsolation[i]
+        PP["CohortIsolation"] = CohortIsolation[i]
+        PP["SimType"] = Scenario_sim
+        TP["is_testing"] = Testing[i]
+        TP["testing_enforced"] = EnforcedTesting[i]
+        push!(ParamVec, PP)
+        push!(TestParamVec, TP)
+        push!(PkgVec, PkgP)
     end
     df = run_many_sims(ParamVec, Nrepeats, OccPattern;
                   NPPerDay = NPvec, TestingParams=TestParamVec,
@@ -928,30 +924,28 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
     PairParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PkgP = copy(BasicPkgParams)
-    for j in 1:length(HHsharing)
-        for i in 1:length(Office_WFH)
-            PP = copy(BasicBulkParams)
-            TP = copy(BasicTestingParams)
-            PairPs = copy(BasicPairParams)
-            PP["Pisol"] = Adherence[i]
-            PP["HouseShareFactor"] = HHsharing[j]
-            PP["CarShareFactor"] = CarSharing[j]
-            PP["Office_WFH"] = Office_WFH[i]
-            PP["TeamDistances"] = fill(TeamDistance[i],3)
-            PP["HouseShareIsolation"] = HouseShareIsolation[i]
-            PP["CarShareIsolation"] = CarShareIsolation[i]
-            PP["CohortIsolation"] = CohortIsolation[i]
-            PP["SimType"] = Scenario_sim
-            TP["is_testing"] = Testing[i]
-            TP["testing_enforced"] = EnforcedTesting[i]
-            PairPs["fixed_driver_pairs"] = FixedPairs[i]
-            PairPs["fixed_loader_pairs"] = FixedPairs[i]
-            PairPs["PairIsolation"] = FixedPairs[i]
-            push!(ParamVec, PP)
-            push!(TestParamVec, TP)
-            push!(PairParamVec, PairPs)
-            push!(PkgVec, PkgP)
-        end
+    for i in 1:length(Office_WFH)
+        PP = copy(BasicBulkParams)
+        TP = copy(BasicTestingParams)
+        PairPs = copy(BasicPairParams)
+        PP["Pisol"] = Adherence[i]
+        PP["HouseShareFactor"] = HHsharing[j]
+        PP["CarShareFactor"] = CarSharing[j]
+        PP["Office_WFH"] = Office_WFH[i]
+        PP["TeamDistances"] = fill(TeamDistance[i],3)
+        PP["HouseShareIsolation"] = HouseShareIsolation[i]
+        PP["CarShareIsolation"] = CarShareIsolation[i]
+        PP["CohortIsolation"] = CohortIsolation[i]
+        PP["SimType"] = Scenario_sim
+        TP["is_testing"] = Testing[i]
+        TP["testing_enforced"] = EnforcedTesting[i]
+        PairPs["fixed_driver_pairs"] = FixedPairs[i]
+        PairPs["fixed_loader_pairs"] = FixedPairs[i]
+        PairPs["PairIsolation"] = FixedPairs[i]
+        push!(ParamVec, PP)
+        push!(TestParamVec, TP)
+        push!(PairParamVec, PairPs)
+        push!(PkgVec, PkgP)
     end
     df = run_many_sims(ParamVec, Nrepeats, OccPattern;
                   NPPerDay = NPvec, TestingParams=TestParamVec,
@@ -987,30 +981,28 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
     PairParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
     PkgP = copy(BasicPkgParams)
-    for j in 1:length(HHsharing)
-        for i in 1:length(Office_WFH)
-            PP = copy(BasicBulkParams)
-            TP = copy(BasicTestingParams)
-            PairPs = copy(BasicPairParams)
-            PP["Pisol"] = Adherence[i]
-            PP["HouseShareFactor"] = HHsharing[j]
-            PP["CarShareFactor"] = CarSharing[j]
-            PP["Office_WFH"] = Office_WFH[i]
-            PP["TeamDistances"] = fill(TeamDistance[i],3)
-            PP["HouseShareIsolation"] = HouseShareIsolation[i]
-            PP["CarShareIsolation"] = CarShareIsolation[i]
-            PP["CohortIsolation"] = CohortIsolation[i]
-            PP["SimType"] = Scenario_sim
-            TP["is_testing"] = Testing[i]
-            TP["testing_enforced"] = EnforcedTesting[i]
-            PairPs["fixed_driver_pairs"] = FixedPairs[i]
-            PairPs["fixed_loader_pairs"] = FixedPairs[i]
-            PairPs["PairIsolation"] = FixedPairs[i]
-            push!(ParamVec, PP)
-            push!(TestParamVec, TP)
-            push!(PairParamVec, PairPs)
-            push!(PkgVec, PkgP)
-        end
+    for i in 1:length(Office_WFH)
+        PP = copy(BasicBulkParams)
+        TP = copy(BasicTestingParams)
+        PairPs = copy(BasicPairParams)
+        PP["Pisol"] = Adherence[i]
+        PP["HouseShareFactor"] = HHsharing[j]
+        PP["CarShareFactor"] = CarSharing[j]
+        PP["Office_WFH"] = Office_WFH[i]
+        PP["TeamDistances"] = fill(TeamDistance[i],3)
+        PP["HouseShareIsolation"] = HouseShareIsolation[i]
+        PP["CarShareIsolation"] = CarShareIsolation[i]
+        PP["CohortIsolation"] = CohortIsolation[i]
+        PP["SimType"] = Scenario_sim
+        TP["is_testing"] = Testing[i]
+        TP["testing_enforced"] = EnforcedTesting[i]
+        PairPs["fixed_driver_pairs"] = FixedPairs[i]
+        PairPs["fixed_loader_pairs"] = FixedPairs[i]
+        PairPs["PairIsolation"] = FixedPairs[i]
+        push!(ParamVec, PP)
+        push!(TestParamVec, TP)
+        push!(PairParamVec, PairPs)
+        push!(PkgVec, PkgP)
     end
     df = run_many_sims(ParamVec, Nrepeats, OccPattern;
                   NPPerDay = NPvec, TestingParams=TestParamVec,
