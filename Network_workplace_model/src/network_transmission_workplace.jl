@@ -44,17 +44,22 @@ const edge_colours = [colorant"red", colorant"red", colorant"green", colorant"or
 #const shift_pattern = 7     #days to draw shifts -- to be included
 
 #Contact duration parameters
-const t_F2F_random = 1.0/6.0
-const t_lunch = 0.5
+const t_F2F_random = 0.25
+const t_lunch = 0.75
 const t_office = 6.0
 const t_car_share = 0.5
 const hh_infection_rate_pd = 0.07
 
-const BreathRate = 0.5
-const ACH = 2.0
-const room_size = 100
+const BreathRate = 0.7      #inhaled -- m3 per hour
+const ACH = 2.0             #air changes per hour
+const V_decay = 1.1*log(2)  #half life in air
+const room_size = 150       #m^3
+const IQph = 4.0            #average infectious quanta exhaled per hour
 #a rough estimate of converting shared room interation with F2F interaction
-const room_sep = 1 - log(25*(BreathRate^2/(ACH*room_size + BreathRate)))/log(2)
+const c_lunch = (1 - (1 - exp(-(ACH + V_decay)*t_lunch))/((ACH + V_decay)*t_lunch))/(room_size*(ACH + V_decay))
+const c_office = (1 - (1 - exp(-(ACH + V_decay)*t_office))/((ACH + V_decay)*t_office))/(room_size*(ACH + V_decay))
+const room_sep_lunch = 1 + log(no_talking_factor * infection_rate_F2F / (BreathRate * c_lunch * IQph))
+const room_sep_office = 1 + log(no_talking_factor * infection_rate_F2F / (BreathRate * c_office * IQph))
 
 #const t_breaks = 1/24       #Time in break/lunch areas (1 hr)
 #around 10 hrs per day: 85 deliveries per day,
@@ -203,7 +208,7 @@ function generate_cohort_graph!(sim::Dict, Nteams::Array{Int64,1}, TeamF2FTime::
             w = F2F_mod*get_team_edge_weight(teams[Ntstart+n], Dict("outside"=>outside[j],
                            "distance"=>distance[j],"rel_time"=>TeamF2FTime[j]))
             if j == 3
-                w += SS_mod*return_infection_weight(room_sep, t_office, false, false)
+                w += SS_mod*return_infection_weight(room_sep_office, t_office, false, false)
             end
             add_cohort_to_graph!(team_graph, teams[Ntstart+n], w)
         end
@@ -959,7 +964,7 @@ function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int;
         #nw in work
         #j0 = sim["job"][nw]          #j0 is jobs of in work
         w_rand = F2F_mod*return_infection_weight(x_rand, t_F2F_random, false, true)
-        wl_room = SS_mod*return_infection_weight(room_sep, t_lunch, false, false)
+        wl_room = SS_mod*return_infection_weight(room_sep_lunch, t_lunch, false, false)
         for (k, i) in enumerate(inf)
             j = sim["job"][i]
             contacts = Array{Int64,1}(undef,0)

@@ -261,21 +261,23 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     NPvec = Int64.(round.(NPbulk*PkgPattern))
     #other params
     PIsol = 0.1:0.1:1.0
-    HHsharing = [0.05, 0.2, 0.5, 1.0]
+    FPs = [false, true]
     II = [1,2,3]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
-    PairPs = copy(BasicPairParams)
     PkgP = copy(BasicPkgParams)
-    for hh in HHsharing
+    for fp in FPs
         for ii in II
             for pi in PIsol
                 PP = copy(BasicBulkParams)
+                PairPs = copy(BasicPairParams)
                 PP["Pisol"] = pi
                 PP["InfInit"] = ii
-                PP["HouseShareFactor"] = hh
+                PairPs["fixed_driver_pairs"] = fp 
+                PairPs["fixed_loader_pairs"] = fp
+                PairPs["PairIsolation"] = fp
                 push!(ParamVec, PP)
                 push!(PairParams, PairPs)
                 push!(PkgVec, PkgP)
