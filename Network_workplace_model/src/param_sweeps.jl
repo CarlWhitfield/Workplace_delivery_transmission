@@ -821,8 +821,6 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
     for i in 1:length(Office_WFH)
         PP = copy(BasicParcelParams)
         TP = copy(BasicTestingParams)
-        PP["HouseShareFactor"] = HHsharing[j]
-        PP["CarShareFactor"] = CarSharing[j]
         PP["Pisol"] = Adherence[i]
         PP["Office_WFH"] = Office_WFH[i]
         PP["TeamDistances"] = fill(TeamDistance[i],3)
@@ -875,8 +873,6 @@ function run_all_interventions_variableprev_scenario_parcel_isol_first(Prev::Arr
     for i in 1:length(Office_WFH)
         PP = copy(BasicParcelParams)
         TP = copy(BasicTestingParams)
-        PP["HouseShareFactor"] = HHsharing[j]
-        PP["CarShareFactor"] = CarSharing[j]
         PP["Pisol"] = Adherence[i]
         PP["Office_WFH"] = Office_WFH[i]
         PP["TeamDistances"] = fill(TeamDistance[i],3)
@@ -929,8 +925,6 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
         TP = copy(BasicTestingParams)
         PairPs = copy(BasicPairParams)
         PP["Pisol"] = Adherence[i]
-        PP["HouseShareFactor"] = HHsharing[j]
-        PP["CarShareFactor"] = CarSharing[j]
         PP["Office_WFH"] = Office_WFH[i]
         PP["TeamDistances"] = fill(TeamDistance[i],3)
         PP["HouseShareIsolation"] = HouseShareIsolation[i]
@@ -986,8 +980,6 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
         TP = copy(BasicTestingParams)
         PairPs = copy(BasicPairParams)
         PP["Pisol"] = Adherence[i]
-        PP["HouseShareFactor"] = HHsharing[j]
-        PP["CarShareFactor"] = CarSharing[j]
         PP["Office_WFH"] = Office_WFH[i]
         PP["TeamDistances"] = fill(TeamDistance[i],3)
         PP["HouseShareIsolation"] = HouseShareIsolation[i]
