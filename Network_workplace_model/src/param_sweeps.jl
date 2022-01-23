@@ -7,7 +7,7 @@ RandomAbsenceRate = 0.03
 ParcelOccPattern = [0.90,1.0,1.0,0.99,0.91,0.55,0.0]
 ParcelPkgPattern = [0.89,1.20,1.14,1.10,1.0,0.37,0.0]
 NPparcel = 3000
-NDparcel_def = Int64(ceil(mean(NPparcel*ParcelPkgPattern[1:6] ./ 
+NDparcel_def = Int64(ceil(mean(NPparcel*ParcelPkgPattern[1:6] ./
                      (85.0*(1.0-RandomAbsenceRate)*ParcelOccPattern[1:6]))))
 NLparcel_def = Int64(ceil(0.5*NDparcel_def))
 NOparcel_def = Int64(ceil(0.3*NDparcel_def))
@@ -31,19 +31,19 @@ BasicPkgParams = Dict("p_fomite_trans"=>0.0001, "Dtime"=>8, "Ltime"=>4, "PkgHlif
 BulkOccPattern = [0.82, 0.98, 0.97, 0.99, 1.0, 0.84, 0.47]
 BulkPkgPattern = [0.80, 0.94, 0.95, 0.94,  1.0, 0.81, 0.44]
 NPbulk = 210
-NDbulk_def = Int64(ceil(mean(NPbulk*BulkPkgPattern ./ 
+NDbulk_def = Int64(ceil(mean(NPbulk*BulkPkgPattern ./
                              (15.0*(1.0-RandomAbsenceRate)*BulkOccPattern))))
 NLbulk_def = Int64(ceil(0.8*NDbulk_def))
 NObulk_def = Int64(ceil(0.4*NDbulk_def))
 NStaffbulk_def = NDbulk_def + NLbulk_def + NObulk_def
-BasicBulkParams = Dict("ND"=>NDbulk_def, "NL"=>NLbulk_def, "NO"=>NObulk_def, 
+BasicBulkParams = Dict("ND"=>NDbulk_def, "NL"=>NLbulk_def, "NO"=>NObulk_def,
                        "NDteams"=>2, "NLteams"=>2, "NOteams"=>1,
-                       "is_cohorts"=>true, "Pisol"=>0.9, "Psusc"=>1.0, 
+                       "is_cohorts"=>true, "Pisol"=>0.9, "Psusc"=>1.0,
                        "p_contact"=>(2.0/(NStaffbulk_def)),
                        "tD"=>0.1, "phi"=>1.0, "InfInit"=>0, "SimType"=>Outbreak_sim,
                        "TeamTimes"=>[0.25,1.0,1.0], "TeamsOutside"=>[false,false,false],
                        "TeamDistances"=>[1.0,1.0,1.0], "HouseShareFactor"=>0.05,
-                       "CarShareFactor"=>0.05, "BreakContactProb"=>0.25, 
+                       "CarShareFactor"=>0.05, "BreakContactProb"=>0.25,
                        "CohortChangeRate"=>(1.0/(NStaffbulk_def)),
                        "AbsenceRate"=>RandomAbsenceRate, "CustomerOutdoorFrac"=>0.5)
 BasicPairParams = Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
@@ -116,7 +116,7 @@ function run_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
         end
     end
 
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec, 
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec,
                        PkgParams = PkgVec, filename="param_sweep.csv")
     return df
 end
@@ -158,7 +158,7 @@ function run_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     end
 
     df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec,
-                       PkgParams = PkgVec, filename="param_sweep_pairs.csv", 
+                       PkgParams = PkgVec, filename="param_sweep_pairs.csv",
                        PairParams = PairParams)
     return df
 end
@@ -186,7 +186,7 @@ function run_contact_sweeps_outbreak_parcel(Nrepeats::Int = 10000)
         end
     end
 
-    df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgVec, 
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern; PkgParams = PkgVec,
                              NPPerDay = NPvec, filename="contact_sweep.csv")
     return df
 end
@@ -402,12 +402,13 @@ function run_testing_sweep_outbreak_parcel(Nrepeats::Int = 10000)
                   PkgParams = PkgVec, output = false)
 
     df2["is_testing"] = zeros(Bool,nrow(df2))
-    df2["new_comply_prob"] = zeros(nrow(df2))
+    df2["testing_enforced"] = zeros(Bool,nrow(df2))
     df2["tperiod"] = zeros(nrow(df2))
     df2["protocol"] = fill(0, nrow(df2))
     df2["specificity"] = 0.999 * ones(nrow(df2))
     df2["delay"] = zeros(nrow(df2))
     df2["test_pause"] = zeros(nrow(df2))
+    df2["test_miss_prob"] = zeros(nrow(df2))
     dfout = vcat(df,df2)
 
     CSV.write("testing_sweep.csv", dfout)
@@ -463,7 +464,8 @@ function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern;  NPPerDay = NPvec,
                         PkgParams = PkgVec, PairParams = PairParams, output = false)
     df2["is_testing"] = zeros(Bool,nrow(df2))
-    df2["new_comply_prob"] = zeros(nrow(df2))
+    df2["testing_enforced"] = zeros(Bool,nrow(df2))
+    df2["test_miss_prob"] = zeros(nrow(df2))
     df2["tperiod"] = zeros(nrow(df2))
     df2["protocol"] = fill(0, nrow(df2))
     df2["specificity"] = 0.999 * ones(nrow(df2))
@@ -582,7 +584,7 @@ end
 #     push!(ParamVec, PP)
 #     push!(PairParams, PairPs)
 #     df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern;  NPPerDay = NPvec,
-#              PkgParams = PkgVec, PairParams = PairParams, output = false, 
+#              PkgParams = PkgVec, PairParams = PairParams, output = false,
 #              Incidence = Inc, Prevalence = Prev)
 #     df2["new_comply_prob"] = zeros(nrow(df2))
 #     df2["tperiod"] = zeros(nrow(df2))
@@ -682,7 +684,7 @@ function run_all_interventions_separately_scenario_parcel(Prev::Array{Float64,1}
     OccPattern = OccPattern[1:length(Prev)]
     PkgPattern = PkgPattern[1:length(Prev)]
     NPvec = Int64.(round.(Demand.*PkgPattern))
-    
+
     HHsharing = [0.05, 0.5]
     CarSharing = [0.05, 0.5]
     Adherence = [0.5, 0.9, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
@@ -693,7 +695,7 @@ function run_all_interventions_separately_scenario_parcel(Prev::Array{Float64,1}
     EnforcedTesting = [false, false, false, false, false, false, true, false, false]
     CarShareIsolation = [false, false, false, false, false, false, false, true, false]
     CohortIsolation = [false, false, false, false, false, false, false, false, true]
-    
+
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     TestParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
@@ -720,7 +722,7 @@ function run_all_interventions_separately_scenario_parcel(Prev::Array{Float64,1}
     end
     df = run_many_sims(ParamVec, Nrepeats, OccPattern;
                   NPPerDay = NPvec, TestingParams=TestParamVec,
-                  Incidence = Inc, Prevalence = Prev, PkgParams = PkgVec, 
+                  Incidence = Inc, Prevalence = Prev, PkgParams = PkgVec,
                   filename="all_interventions_sep_parcel.csv")
     return df
 end
@@ -733,7 +735,7 @@ function run_all_interventions_separately_scenario_pairs(Prev::Array{Float64,1},
     OccPattern = OccPattern[1:length(Prev)]
     PkgPattern = PkgPattern[1:length(Prev)]
     NPvec = Int64.(round.(Demand.*PkgPattern))
-    
+
     HHsharing = [0.05, 0.5]
     CarSharing = [0.05, 0.5]
     Adherence = [0.5, 0.9, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
@@ -781,7 +783,7 @@ function run_all_interventions_separately_scenario_pairs(Prev::Array{Float64,1},
     df = run_many_sims(ParamVec, Nrepeats, OccPattern;
                   NPPerDay = NPvec, TestingParams=TestParamVec,
                   Incidence = Inc, Prevalence = Prev,
-                  PairParams = PairParamVec, PkgParams = PkgVec, 
+                  PairParams = PairParamVec, PkgParams = PkgVec,
                   filename="all_interventions_sep_pairs.csv")
     return df
 end
@@ -795,7 +797,7 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
     OccPattern = OccPattern[1:length(Prev)]
     PkgPattern = PkgPattern[1:length(Prev)]
     NPvec = Int64.(round.(Demand.*PkgPattern))
-    
+
     HHsharing = [0.05, 0.5]
     CarSharing = [0.05, 0.5]
     Adherence = [0.5, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9]
@@ -833,7 +835,7 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
     end
     df = run_many_sims(ParamVec, Nrepeats, OccPattern;
                   NPPerDay = NPvec, TestingParams=TestParamVec,
-                  Incidence = Inc, Prevalence = Prev, PkgParams = PkgVec, 
+                  Incidence = Inc, Prevalence = Prev, PkgParams = PkgVec,
                   filename="all_interventions_cumul_parcel.csv")
     return df
 
@@ -847,7 +849,7 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
     OccPattern = OccPattern[1:length(Prev)]
     PkgPattern = PkgPattern[1:length(Prev)]
     NPvec = Int64.(round.(Demand.*PkgPattern))
-    
+
     HHsharing = [0.05, 0.5]
     CarSharing = [0.05, 0.5]
     Adherence = [0.5, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9]
@@ -895,7 +897,7 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
     df = run_many_sims(ParamVec, Nrepeats, OccPattern;
                   NPPerDay = NPvec, TestingParams=TestParamVec,
                   Incidence = Inc, Prevalence = Prev,
-                  PairParams = PairParamVec, PkgParams = PkgVec, 
+                  PairParams = PairParamVec, PkgParams = PkgVec,
                   filename="all_interventions_cumul_pairs.csv")
     return df
 end
@@ -956,7 +958,7 @@ end
 function run_param_sweep_outbreak_wpsize_parcel(Nrepeats::Int = 10000)
     OccPattern = repeat(ParcelOccPattern,NweeksDefault)
     PkgPattern = repeat(ParcelPkgPattern,NweeksDefault)
-    
+
     rel_size = 0.5 .+ 1.5.*(0:20)./20
 
     df = DataFrame()
@@ -987,9 +989,9 @@ function run_param_sweep_outbreak_wpsize_parcel(Nrepeats::Int = 10000)
             df = vcat(df,dfh)
         end
     end
-    
+
     CSV.write("wpsize_param_sweep_parcel.csv", df)
-    
+
     return df
 end
 
@@ -1029,7 +1031,7 @@ function run_param_sweep_outbreak_wpsize_pairs(Nrepeats::Int = 10000)
             df = vcat(df,dfh)
         end
     end
-    
+
     CSV.write("wpsize_param_sweep_pairs.csv", df)
 
     return df
