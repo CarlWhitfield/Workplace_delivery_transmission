@@ -58,8 +58,8 @@ const IQph = 4.0            #average infectious quanta exhaled per hour
 #a rough estimate of converting shared room interation with F2F interaction
 const c_lunch = (1 - (1 - exp(-(ACH + V_decay)*t_lunch))/((ACH + V_decay)*t_lunch))/(room_size*(ACH + V_decay))
 const c_office = (1 - (1 - exp(-(ACH + V_decay)*t_office))/((ACH + V_decay)*t_office))/(room_size*(ACH + V_decay))
-const room_sep_lunch = 1 + log(no_talking_factor * infection_rate_F2F / (BreathRate * c_lunch * IQph))/np.log(2)
-const room_sep_office = 1 + log(no_talking_factor * infection_rate_F2F / (BreathRate * c_office * IQph))/np.log(2)
+const room_sep_lunch = 1 + log(no_talking_factor * infection_rate_F2F / (BreathRate * c_lunch * IQph))/log(2)
+const room_sep_office = 1 + log(no_talking_factor * infection_rate_F2F / (BreathRate * c_office * IQph))/log(2)
 
 #const t_breaks = 1/24       #Time in break/lunch areas (1 hr)
 #around 10 hrs per day: 85 deliveries per day,
