@@ -830,6 +830,9 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
         PP["SimType"] = Scenario_sim
         TP["is_testing"] = Testing[i]
         TP["testing_enforced"] = EnforcedTesting[i]
+        PP["NDteams"] = NDteams[i]
+        PP["NLteams"] = NLteams[i]
+        PP["NOteams"] = NOteams[i]
         push!(ParamVec, PP)
         push!(TestParamVec, TP)
         push!(PkgVec, PkgP)
@@ -882,6 +885,9 @@ function run_all_interventions_variableprev_scenario_parcel_isolfirst(Prev::Arra
         PP["SimType"] = Scenario_sim
         TP["is_testing"] = Testing[i]
         TP["testing_enforced"] = EnforcedTesting[i]
+        PP["NDteams"] = NDteams[i]
+        PP["NLteams"] = NLteams[i]
+        PP["NOteams"] = NOteams[i]
         push!(ParamVec, PP)
         push!(TestParamVec, TP)
         push!(PkgVec, PkgP)
