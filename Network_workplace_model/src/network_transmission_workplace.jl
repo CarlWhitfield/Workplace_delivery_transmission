@@ -246,6 +246,9 @@ function shuffle_cohorts!(sim::Dict, p_s::Float64, Nteams::Array{Int64,1}, TeamF
             sim["cohorts"][j][old_team] = old_cohort
             w_old = get_team_edge_weight(old_cohort, Dict("outside"=>outside[j],
                            "distance"=>distance[j],"rel_time"=>TeamF2FTime[j]))
+            if j == 3
+                w_old += SS_mod*return_infection_weight(room_sep_office, t_office, false, false)
+            end
             update_cohort_edge_weight!(sim["cohort_network"], old_cohort, w_old)
 
             selection = 1:Nteams[j]
@@ -256,6 +259,9 @@ function shuffle_cohorts!(sim::Dict, p_s::Float64, Nteams::Array{Int64,1}, TeamF
             w_new = get_team_edge_weight(sim["cohorts"][j][new_team], 
                     Dict("outside"=>outside[j], "distance"=>distance[j],
                     "rel_time"=>TeamF2FTime[j]))
+            if j == 3
+                w_new += SS_mod*return_infection_weight(room_sep_office, t_office, false, false)
+            end
             update_cohort_edge_weight!(sim["cohort_network"], sim["cohorts"][j][new_team], w_new)
         end
     end
