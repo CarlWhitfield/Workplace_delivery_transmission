@@ -806,9 +806,9 @@ function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
         #InfDrivers contains infectious drivers
         #InfDriverPos contains their position in AllDrivers which is an array of arrays
         #NADrivers is the number of items assigned to each working group in AllDrivers
-        out_weight = F2F_mod*return_infection_weight(1.0,
+        out_weight = F2F_mod*return_infection_weight(modifiers["distance"],
                     sim["contact_times"]["t_doorstep"],true, true)
-        in_weight = F2F_mod*return_infection_weight(1.0,
+        in_weight = F2F_mod*return_infection_weight(modifiers["distance"],
                     sim["contact_times"]["t_doorstep"],false, true)
         doorstep_weight = modifiers["outdoor_contact_frac"] * out_weight
          + (1-modifiers["outdoor_contact_frac"]) * in_weight
@@ -1210,7 +1210,11 @@ function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay
     create_isolation_network!(sim, IsolParams)
 
     #TODO -- sanitise frequency and mask prob not included yet
-    CustModifiers = Dict("outdoor_contact_frac"=>1.0, "sanitise_frequency"=>0.0, "mask_prob"=>0.0)
+    if PairParams["is_driver_pairs"] || PairParams["is_loader_pairs"]
+        CustModifiers = Dict("outdoor_contact_frac"=>0.5, "distance"=>2.0, "sanitise_frequency"=>0.0, "mask_prob"=>0.0)
+    else  
+        CustModifiers = Dict("outdoor_contact_frac"=>1.0, "distance"=>1.0, "sanitise_frequency"=>0.0, "mask_prob"=>0.0)
+    end
     for key in keys(CustModifiers)
         if haskey(Params,key)
             CustModifiers[key] = Params[key]
