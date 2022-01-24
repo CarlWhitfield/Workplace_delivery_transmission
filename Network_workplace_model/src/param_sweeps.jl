@@ -93,7 +93,7 @@ function run_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     NPvec = Int64.(round.(NPparcel*PkgPattern))
 
     II = [1,2,3]
-    CR = [0, 0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 5.0] * BasicParcelParams["p_contact"]
+    CR = [0, 0.5, 1.0, 2.0, 5.0, 10.0] * BasicParcelParams["CohortChangeRate"]
     NDteams = [3,3,3,3,3,3,4,6,8]
     NLteams = [2,2,2,3,4,5,2,2,2]
     NOteams = [1,2,4,1,1,1,1,1,1]
@@ -168,7 +168,7 @@ function run_contact_sweeps_outbreak_parcel(Nrepeats::Int = 10000)
     PkgPattern = repeat(ParcelPkgPattern,NweeksDefault)
     NPvec = Int64.(round.(NPparcel*PkgPattern))
     PC = [0, 0.5, 1.0, 2.0, 5.0] * BasicParcelParams["p_contact"]
-    CR = [0, 0.1, 0.5, 1.0, 2.0, 5.0] * BasicParcelParams["p_contact"]
+    CR = [0, 0.1, 0.5, 1.0, 2.0, 5.0] * BasicParcelParams["CohortChangeRate"]
     II = [1,2,3]
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
@@ -198,7 +198,7 @@ function run_contacts_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     #other params
     II = [1,2,3]
     PC = [0, 0.5, 1.0, 2.0, 5.0] * BasicBulkParams["p_contact"]
-    CR = [0, 0.1, 0.5, 1.0, 2.0, 5.0] * BasicBulkParams["p_contact"]
+    CR = [0, 0.1, 0.5, 1.0, 2.0, 5.0] * BasicBulkParams["CohortChangeRate"]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
