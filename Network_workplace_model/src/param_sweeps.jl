@@ -841,7 +841,7 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
     return df
 end
 
-function run_all_interventions_variableprev_scenario_parcel_isol_first(Prev::Array{Float64,1},
+function run_all_interventions_variableprev_scenario_parcel_isolfirst(Prev::Array{Float64,1},
             Inc::Array{Float64,1}, Demand::Array{Float64,1}, Nrepeats::Int = 10000)
     NWeeks = Int64(ceil(length(Prev)/7))
     OccPattern = repeat(ParcelOccPattern,NWeeks)
@@ -949,7 +949,7 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
     return df
 end
 
-function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1},
+function run_all_interventions_variableprev_scenario_pairs_isolfirst(Prev::Array{Float64,1},
              Inc::Array{Float64,1}, Demand::Array{Float64,1}, Nrepeats::Int = 10000)
     NWeeks = Int64(ceil(length(Prev)/7))
     OccPattern = repeat(BulkOccPattern,NWeeks)
