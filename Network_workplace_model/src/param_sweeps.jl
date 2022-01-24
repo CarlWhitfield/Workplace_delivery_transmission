@@ -1000,7 +1000,7 @@ function run_all_interventions_variableprev_scenario_pairs_isolfirst(Prev::Array
                   NPPerDay = NPvec, TestingParams=TestParamVec,
                   Incidence = Inc, Prevalence = Prev,
                   PairParams = PairParamVec, PkgParams = PkgVec,
-                  filename="all_interventions_cumul_pairs.csv")
+                  filename="all_interventions_cumul_pairs_isolfirst.csv")
     return df
 end
 
