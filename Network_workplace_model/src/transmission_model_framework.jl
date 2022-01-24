@@ -703,7 +703,9 @@ function update_sim_summary!(summary::Dict, sim::Dict, inf_pairs::Array{Int64,2}
         summary["InfsByType"][inf_pairs[3,k]][j,i_day] += 1
     end
     
-    summary["IndexCaseInfections"] += sum(inf_pairs[1,:] .== summary["IndexCase"])
+    if haskey(summary,"IndexCase")
+        summary["IndexCaseInfections"] += sum(inf_pairs[1,:] .== summary["IndexCase"])
+    end
 end
 
 
