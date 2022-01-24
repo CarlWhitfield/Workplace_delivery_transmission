@@ -627,7 +627,6 @@ end
 function sim_setup!(sim::Dict, InfInit::Int64, i_day::Int64, Ndays::Int64)
     index_case = infect_random!(sim,InfInit,i_day)
     sim_summary = basic_sim_setup(sim,i_day,Ndays)
-    sim_summary["IndexCaseInfections"] = zeros(Int64,Ndays)
     sim_summary["IndexCase"] = index_case
     sim_summary["IndexCaseInfections"] = 0
     sim_summary["IndexCaseInfectivity"] = sim["inf_mag"][index_case]
@@ -703,6 +702,8 @@ function update_sim_summary!(summary::Dict, sim::Dict, inf_pairs::Array{Int64,2}
         j = sim["job"][inf_pairs[2,k]]  #job of infectee
         summary["InfsByType"][inf_pairs[3,k]][j,i_day] += 1
     end
+    
+    summary["IndexCaseInfections"] += sum(inf_pairs[1,:] .== summary["IndexCase"])
 end
 
 
