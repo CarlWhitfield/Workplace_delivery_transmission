@@ -58,8 +58,8 @@ const IQph = 4.0            #average infectious quanta exhaled per hour
 #a rough estimate of converting shared room interation with F2F interaction
 const c_lunch = (1 - (1 - exp(-(ACH + V_decay)*t_lunch))/((ACH + V_decay)*t_lunch))/(room_size*(ACH + V_decay))
 const c_office = (1 - (1 - exp(-(ACH + V_decay)*t_office))/((ACH + V_decay)*t_office))/(room_size*(ACH + V_decay))
-const room_sep_lunch = 1 + log(no_talking_factor * infection_rate_F2F / (BreathRate * c_lunch * IQph))
-const room_sep_office = 1 + log(no_talking_factor * infection_rate_F2F / (BreathRate * c_office * IQph))
+const room_sep_lunch = 1 + log(no_talking_factor * infection_rate_F2F / (BreathRate * c_lunch * IQph))/np.log(2)
+const room_sep_office = 1 + log(no_talking_factor * infection_rate_F2F / (BreathRate * c_office * IQph))/np.log(2)
 
 #const t_breaks = 1/24       #Time in break/lunch areas (1 hr)
 #around 10 hrs per day: 85 deliveries per day,
@@ -234,7 +234,8 @@ function find_cohort_no_and_members(sim::Dict, j::Int8, i::Int64)
 end
 
 function shuffle_cohorts!(sim::Dict, p_s::Float64, Nteams::Array{Int64,1}, TeamF2FTime::Array{Float64,1},
-                               outside::Array{Bool,1}, distance::Array{Float64,1})
+                               outside::Array{Bool,1}, distance::Array{Float64,1}; F2F_mod::Float64=1.0,
+                         SS_mod::Float64=1.0,) 
     to_move = randsubseq(1:sim["Ntot"], p_s) #number to move
     for i in to_move
         j = sim["job"][i]
@@ -244,7 +245,7 @@ function shuffle_cohorts!(sim::Dict, p_s::Float64, Nteams::Array{Int64,1}, TeamF
                 rem_edge!.(Ref(sim["cohort_network"]),Ref(i),old_cohort)   #remove all edges
             end
             sim["cohorts"][j][old_team] = old_cohort
-            w_old = get_team_edge_weight(old_cohort, Dict("outside"=>outside[j],
+            w_old = F2F_mod*get_team_edge_weight(old_cohort, Dict("outside"=>outside[j],
                            "distance"=>distance[j],"rel_time"=>TeamF2FTime[j]))
             if j == 3
                 w_old += SS_mod*return_infection_weight(room_sep_office, t_office, false, false)
@@ -256,7 +257,7 @@ function shuffle_cohorts!(sim::Dict, p_s::Float64, Nteams::Array{Int64,1}, TeamF
             new_team = rand(selection)
             add_edge!.(Ref(sim["cohort_network"]),Ref(i),sim["cohorts"][j][new_team]) 
             push!(sim["cohorts"][j][new_team],i)
-            w_new = get_team_edge_weight(sim["cohorts"][j][new_team], 
+            w_new = F2F_mod*get_team_edge_weight(sim["cohorts"][j][new_team], 
                     Dict("outside"=>outside[j], "distance"=>distance[j],
                     "rel_time"=>TeamF2FTime[j]))
             if j == 3
@@ -1120,7 +1121,8 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
     
     Nteams = [Params["NDteams"],Params["NLteams"],Params["NOteams"]]
     shuffle_cohorts!(sim, Params["CohortChangeRate"], Nteams, Params["TeamTimes"],
-                               Params["TeamsOutside"], Params["TeamDistances"])
+                               Params["TeamsOutside"], Params["TeamDistances"];
+                               F2F_mod=TransModifiers["F2F_mod"], SS_mod=TransModifiers["Aerosol_mod"])
     
     #do_testing
     if TestParams["is_testing"]
