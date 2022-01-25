@@ -93,7 +93,7 @@ function run_param_sweep_outbreak_parcel(Nrepeats::Int = 10000)
     NPvec = Int64.(round.(NPparcel*PkgPattern))
 
     II = [1,2,3]
-    CR = [0, 0.5, 1.0, 2.0, 5.0, 10.0] * BasicParcelParams["CohortChangeRate"]
+    CR = [0.0, 0.5, 1.0, 2.0, 5.0, 10.0] * BasicParcelParams["CohortChangeRate"]
     NDteams = [3,3,3,3,3,3,4,6,8]
     NLteams = [2,2,2,3,4,5,2,2,2]
     NOteams = [1,2,4,1,1,1,1,1,1]
@@ -641,7 +641,7 @@ end
 function run_param_sweep_outbreak_fomite_pairs(Nrepeats::Int = 10000)
     OccPattern = repeat(BulkOccPattern,NweeksDefault)
     PkgPattern = repeat(BulkPkgPattern,NweeksDefault)
-    NPh = [2000,3000,4000,5000]
+    NPh = [150,210,270,330]
     II = [1,2,3]
     PFT = [0.0001,0.001,0.01]
 
