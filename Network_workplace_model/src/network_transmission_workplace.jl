@@ -390,19 +390,20 @@ end
 
 function init_pairs!(sim::Dict, PairParams::Dict)
     sim["fixed_job_pairings"] = Array{Int64,2}(undef,2,0)
+    sim["fixed_job_pair_labels"] = Array{Int64,1}(undef,0)
     NDpairs = Int64(floor(sim["N"][1]/2))
     NLpairs = Int64(floor(sim["N"][2]/2))
     if PairParams["is_driver_pairs"]
-        sim["driver_pairs"] = Array{Int64,2}(undef,2,0)
         if PairParams["fixed_driver_pairs"]
+            sim["fixed_job_pair_labels"] = vcat(sim["fixed_job_pair_labels"],ones(NDpairs))
             sim["fixed_job_pairings"] = hcat(sim["fixed_job_pairings"],
                                         [transpose(collect(1:2:2*NDpairs));
                                          transpose(collect(2:2:2*NDpairs))])
         end
     end
     if PairParams["is_loader_pairs"]
-        sim["loader_pairs"] = Array{Int64,2}(undef,2,0)
         if PairParams["fixed_loader_pairs"]
+            sim["fixed_job_pair_labels"] = vcat(sim["fixed_job_pair_labels"],2*ones(NLpairs))
             sim["fixed_job_pairings"] = hcat(sim["fixed_job_pairings"],
                     [transpose(collect((sim["N"][1]+1):2:(sim["N"][1]+2*NLpairs)));
                      transpose(collect((sim["N"][1]+2):2:(sim["N"][1]+2*NLpairs)))])
@@ -457,43 +458,59 @@ function select_pairs!(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64,
     #remove indices for random absences
     iavailable = generate_random_absences(iavailable, AbsRate)
     if occ > 0.0
-        iavailable = generate_random_absences(iavailable, 1 - occ)
         #boolean array for who is available
         is_available = zeros(Bool,length(jobgroup))
         is_available[iavailable] .= true
         #node numbers of who is available
         available = jobgroup[iavailable]
-
+        
+        NPneed = occ*length(jobgroup)/2 
+        remainder = NPneed - floor(NPneed)
+        #randomly select whether we round up or down so it averages to occ
+        if rand() > remainder
+            Npairs_needed = Int64(floor(NPneed))
+        else
+            Npairs_needed = Int64(ceil(NPneed))
+        end
+        Npairs_available = Int64(floor(length(available)/2))
+        
         #number of pairs to be formed
-        NP = Int64(floor(length(available)/2))
+        NP = min(Npairs_needed, Npairs_available)
+        
         pairs = zeros(Int64,(2,NP))
         if fixed_pairs
             #total number of fixed pairs
-            TotPairs = Int64(floor(sim["N"][job]/2))
-            Njend = TotPairs*2
-            #indices of fixed pairs
-            p1 = 1:2:Njend
-            p2 = 2:2:Njend
-            #which pairs are available
-            is_pair_available = is_available[p1] .* is_available[p2]
-            available_pairs = (1:TotPairs)[is_pair_available]
+            fp_bool = (sim["fixed_job_pair_labels"] .== job)
+            pair_nos = collect(1:length(sim["fixed_job_pair_labels"]))[fp_bool]
+            p1 = sim["fixed_job_pairings"][1,pair_nos]
+            p2 = sim["fixed_job_pairings"][2,pair_nos]
+            is_pair_available = ((in(available).(p1)) .* (in(available).(p2)))
+            available_pairs = pair_nos[is_pair_available]
+            
             #who is available unpaired
-            available_unpaired = jobgroup[vcat(p1[is_available[p1] .* (.!is_available[p2])],
-                                p2[is_available[p2] .* (.!is_available[p1])],ijobgroup[ijobgroup .> Njend])]
-
+            available_unpaired = vcat(p1[(in(available).(p1))  .* .!(in(available).(p2))],
+                                      p2[(in(available).(p2))  .* .!(in(available).(p1))])
+            
             #fill available fixed pairs first
-            pairs_nos = vcat(transpose(jobgroup[p1]), transpose(jobgroup[p2]))
             apl = length(available_pairs)
-            pairs[1,1:apl] = pairs_nos[1,available_pairs]
-            pairs[2,1:apl] = pairs_nos[2,available_pairs]
-
-            #randomly allocate unpaired people
-            aups = length(available_unpaired)
-            NPUs = Int64(floor(aups/2))
-            if NPUs > 0
-                nos = sample(available_unpaired, 2*NPUs, replace = false)
-                pairs[1,(apl+1):(apl+NPUs)] = nos[1:NPUs]
-                pairs[2,(apl+1):(apl+NPUs)] = nos[(NPUs+1):(2*NPUs)]
+            if apl <= NP
+                pairs[:,1:length(available_pairs)] = 
+                                 sim["fixed_job_pairings"][:,available_pairs]
+                if apl < NP  #need to fill with unpaired people
+                    #randomly allocate unpaired people
+                    aups = length(available_unpaired)
+                    NPUs = Int64(floor(aups/2))
+                    if NPUs > 0
+                        Npsample = min(NPUs, (NP-apl))
+                        nos = sample(available_unpaired, 2*Npsample, replace = false)
+                        pairs[1,(apl+1):(apl+Npsample)] = nos[1:Npsample]
+                        pairs[2,(apl+1):(apl+Npsample)] = nos[(Npsample+1):(2*Npsample)]
+                    end
+                end
+            else
+                #randomly select fixed pairs
+                sampled_pair_nos = sample(available_pairs, NP, replace = false)
+                pairs = sim["fixed_job_pairings"][:,sampled_pair_nos]
             end
         else
             #randomly allocate all pairs
@@ -623,73 +640,6 @@ function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dic
 
     return at_work, NAs
 end
-
-
-
-
-
-
-
-
-# """
-
-# """
-# function get_in_work(sim::Dict, occ::Float64, Ncons::Int64,
-#                 driver_pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0),
-#                 driver_cons::Array{Int64,1} = Array{Int64,1}(undef,0),
-#                 loader_pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0),
-#                 loader_cons::Array{Int64,1} = Array{Int64,1}(undef,0),
-#                 office_wfh::Bool = false)
-#     #wih driver pairs
-#     at_work = zeros(Bool,sim["Ntot"])
-#     NAs = zeros(Int64,sim["Ntot"])
-#     to_select = []
-#     if length(driver_pairs) > 0
-#         at_work[vec(driver_pairs)] .= true
-#         NAs[driver_pairs[1,:]] .= driver_cons
-#         NAs[driver_pairs[2,:]] .= driver_cons
-#     else
-#         push!(to_select,1)
-#     end
-#     if length(loader_pairs) > 0
-#         at_work[vec(loader_pairs)] .= true
-#         NAs[loader_pairs[1,:]] .= loader_cons
-#         NAs[loader_pairs[2,:]] .= loader_cons
-#     else
-#         push!(to_select,2)
-#     end
-#     if office_wfh == false
-#         push!(to_select,3)
-#     end
-#     for j in to_select
-#         job = sim["job_sorted_nodes"][j]
-#         available = job[sim["isolation_status"][job] .== false]
-#         if length(available)/length(job) > occ
-#             w = sample(job, round(Int,occ*length(job)), replace=false)
-#         else
-#             w = available
-#         end
-#         if j < 3
-#             NAs[w] .= rand(Multinomial(Ncons,length(w)))
-#         end
-#         at_work[w] .= true
-#     end
-
-#     return at_work, NAs
-# end
-
-# function get_infectivities(sim::Dict, i_day::Int)
-#     nr = 1:sim["Ntot"]
-#     infected = (sim["infection_status"] .!= Susc) .* (sim["infection_status"] .!= Recd)
-#     inf = nr[infected .* sim["at_work"]]
-#     inf_scales = zeros(length(inf))
-#     j = 1
-#     for i in inf
-#         inf_scales[j] = sim["infection_profiles"][i][i_day - sim["inf_time"][i] + 1]
-#         j += 1
-#     end
-#     return inf, inf_scales
-# end
 
 function reset_daily_contact_networks!(sim::Dict)
     sim["driver_pair_network"] = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))

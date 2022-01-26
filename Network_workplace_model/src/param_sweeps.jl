@@ -148,7 +148,7 @@ function run_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
                     PP["InfInit"] = ii
                     PairPs = Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
                                   "fixed_driver_pairs"=>fix,"fixed_loader_pairs"=>fix,
-                                  "is_window_open"=>wo)
+                                  "is_window_open"=>wo, "PairIsolation"=>fix)
                     push!(ParamVec, PP)
                     push!(PairParams, PairPs)
                     push!(PkgVec, PkgP)
