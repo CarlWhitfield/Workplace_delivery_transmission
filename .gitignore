@@ -11,10 +11,10 @@ Network_workplace_model/.ipynb_checkpoints/
 Network_workplace_model/*/.ipynb_checkpoints/
 Network_workplace_model/src/alt_parameters/.ipynb_checkpoints/
 Testing models/.ipynb_checkpoints/
-Network_workplace_model/Testing_params/
+Network_workplace_model/Testing_params/*
 *.pdf
 *.svg
-Network_workplace_model/Latest_results/data_compression.ipynb
+Network_workplace_model/Latest_results/*
 *.pptx
 *.ipynb
-Testing models/.ipynb_checkpoints/Scenarios-checkpoint.ipynb
+Testing models/*
