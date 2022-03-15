@@ -5,16 +5,19 @@
 *.png
 *.pyc
 *.mp4
-Company Data Analysis/
-.ipynb_checkpoints/
-Network_workplace_model/.ipynb_checkpoints/
-Network_workplace_model/*/.ipynb_checkpoints/
-Network_workplace_model/src/alt_parameters/.ipynb_checkpoints/
-Testing models/.ipynb_checkpoints/
-Network_workplace_model/Testing_params/*
 *.pdf
 *.svg
-Network_workplace_model/Latest_results/*
 *.pptx
 *.ipynb
+Company Data Analysis/*
+.ipynb_checkpoints/*
+Network_workplace_model/.ipynb_checkpoints/*
+Network_workplace_model/*/.ipynb_checkpoints/*
+Testing models/.ipynb_checkpoints/*
+Network_workplace_model/Testing_params/*
+Network_workplace_model/Latest_results/*
+Network_workplace_model/src/alt_parameters/*
 Testing models/*
+Network_workplace_model/Notebooks/*
+Python_model_original/*
+test_net.jl
