@@ -8,9 +8,9 @@
 
 
 #include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos_v2.jl")
-include("../../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
+include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
-using LightGraphs
+using Graphs
 using MetaGraphs
 
 #sim type definitions
@@ -34,6 +34,7 @@ const mask_factor_infector = 0.25
 const mask_factor_infectee = 0.5
 const distance_factor_per_m = 0.5
 
+#P_inf = 1 - exp(-w(t,x)) -- this function returns w
 function return_infection_weight(distance::Float64, duration::Float64,
                                  outdoor::Bool, talking::Bool)
     w = infection_rate_F2F * duration * (distance_factor_per_m^(distance-1.0))
@@ -47,6 +48,8 @@ function return_infection_weight(distance::Float64, duration::Float64,
     return w
 end
 
+#beta = w * mask1_factor * mask2_factor
+#returns p_inf
 function convert_weight_to_prob(weight::Float64, inf::Float64,
                      susc::Float64; mask_infector::Bool = false,
                      mask_infectee::Bool = false)
@@ -302,15 +305,23 @@ end
 """
 
 """
-function get_introductions(sim::Dict, i_day::Int)
+function get_introductions(sim::Dict, i_day::Int, introduction_ID::Int; 
+                           rel_rates::Array{Float64,1} = ones(sim["Njobs"]))
     #doesn't matter if individual is in work or not
-    newinfs = randsubseq(1:sim["Ntot"],sim["Incidence"][i_day])
+    iprob = zeros(sim["Ntot"])
+    for j in 1:sim["Njobs"]
+        iprob[sim["job_sorted_nodes"][j]] .= rel_rates[j]*sim["Incidence"][i_day]
+    end
+    ind = collect(1:sim["Ntot"])
+    newinfs = ind[rand(sim["Ntot"]) .< (iprob)]
     NI = length(newinfs)
     infpairs = Array{Int64,2}(undef,3,0)
     if NI > 0
         infpairs = [transpose(zeros(Int64,NI)); transpose(newinfs);
-                       introduction*transpose(ones(Int64,NI))]
+                       introduction_ID*transpose(ones(Int64,NI))]
     end
+    
+    
     return infpairs
 end
 
@@ -434,7 +445,8 @@ function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
         #get all non susceptibles
         nr = 1:sim["Ntot"]
         update_testing_state!(sim, i_day)
-        bool_will_do_test = (sim["testing_paused"] .== false) .* sim["will_isolate_with_test"]
+        bool_will_do_test = (sim["testing_paused"] .== false) .* sim["will_isolate_with_test"] .* 
+                            (sim["non_testers"] .== false)
         bool_exposed = (sim["infection_status"] .!= Susc)
         exposed = nr[bool_exposed]
         should_be_positive = exposed[length.(sim["test_pos_profiles"][exposed]) .>
@@ -454,6 +466,9 @@ function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
             pos_probs_exposed = zeros(LP)
             for (i,c) in enumerate(should_be_positive)
                 pos_probs_exposed[i] = sim["test_pos_profiles"][c][1 + i_day - sim["inf_time"][c]]
+                if bool_will_do_test[c] == false
+                    pos_probs_exposed[i] = 0  #people who don't do test will not test positive
+                end
             end
             #print(pos_probs_exposed,'\n')
             # print("Pos prob: ", pos_probs_exposed, '\n')
@@ -744,13 +759,19 @@ end
 
 # end
 function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict,
-                                   OccPerDay::Array{Float64,1})
+                                   NDays::Int)
     i_day = rand(1:7)
-    if TestParams["is_testing"]
+    if any(TestParams["is_testing"])
         if (TestParams["protocol"] == PCR_mass_protocol
          || TestParams["protocol"] == LFD_mass_protocol)
              sim["test_days"], sim["test_day_counter"] =
-                     init_testing!(sim, TestParams, i_day, length(OccPerDay); fill_pos_profiles=false)
+                     init_testing!(sim, TestParams, i_day, NDays; fill_pos_profiles=false)
+            sim["non_testers"] = zeros(Int,sim["Ntot"])
+            for j in 1:sim["Njobs"]
+                if TestParams["is_testing"][j] == false
+                    sim["non_testers"][sim["job_sorted_nodes"][j]] .= true
+                end
+            end
         end  #add options for other protocols here
     else
         sim["test_day_counter"] = 1
@@ -758,11 +779,11 @@ function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict,
     end
     Anyinf = true
     if Params["SimType"] == Outbreak_sim
-        sim_summary = sim_setup!(sim, Params["InfInit"], i_day, length(OccPerDay))
+        sim_summary = sim_setup!(sim, Params["InfInit"], i_day, NDays)
         Anyinf = any(((sim["infection_status"] .== Susc)
                       .+ (sim["infection_status"] .== Recd)) .== 0)
     elseif Params["SimType"] == Scenario_sim
-        sim_summary = scenario_sim_setup!(sim, i_day, length(OccPerDay))
+        sim_summary = scenario_sim_setup!(sim, i_day, NDays)
     end
 
     return sim_summary, i_day, Anyinf

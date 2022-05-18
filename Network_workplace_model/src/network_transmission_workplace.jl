@@ -12,7 +12,7 @@ using Distributions
 using Random
 using StatsBase
 
-using LightGraphs
+using Graphs
 using MetaGraphs
 using GraphPlot
 
@@ -200,8 +200,7 @@ function generate_cohort_graph!(sim::Dict, Nteams::Array{Int64,1}, TeamF2FTime::
         Nstart += sim["N"][j]
         Ntstart += Nteams[j]
     end
-    graph = LightGraphs.SimpleGraph(sim["Ntot"])
-    team_graph = MetaGraphs.MetaGraph(graph)
+    team_graph = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))
     Ntstart = 0
     for j in 1:length(sim["N"])
         for n in 1:Nteams[j]
@@ -524,7 +523,7 @@ function select_pairs!(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64,
         pairs = Array{Int64,2}(undef,0)
         pair_cons = Array{Int64,1}(undef,0)
     end
-    simple_pair_graph = MetaGraphs.MetaGraph(LightGraphs.SimpleGraph(sim["Ntot"]))
+    simple_pair_graph = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))
     NPfinal = size(pairs,2)
     pairs_out = Array{Array{Int64,1},1}(undef,NPfinal)
     for j in 1:size(pairs,2)
@@ -1096,7 +1095,7 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
     infpairs = Array{Int64,2}(undef,3,0)
 
     #introductions
-    intro_pairs = get_introductions(sim, i_day)
+    intro_pairs = get_introductions(sim, i_day, introduction)
     intros = get_customer_introductions(sim, i_day, NAssignments, cust_modifiers; 
                                         F2F_mod=TransModifiers["F2F_mod"])
     intro_pairs = hcat(intro_pairs,
