@@ -90,7 +90,6 @@ Initialises the transmission model.
 function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psusc::Float64, Inc::Array{Float64,1},
     Prev::Array{Float64,1})
     Ntot = sum(N_per_role)
-    sg = LightGraphs.SimpleGraph(Ntot)
     Nj = length(N_per_role)
     sim = Dict("Ntot"=>Ntot, "N"=>N_per_role, "job"=>zeros(Int8, Ntot),
                "Njobs"=>Nj, "inf_time"=>(zeros(Int64, Ntot) .- 1),
@@ -115,7 +114,7 @@ function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psu
                 "at_work"=>zeros(Bool, Ntot),
                 "infection_status"=>zeros(Int8,Ntot),
                 "days_infectious" => zeros(Int64,Ntot),
-                "contact_network" => MetaGraphs.MetaGraph(sg),
+                "contact_network" => MetaGraphs.MetaGraph(SimpleGraph(Ntot)),
                 "job_sorted_nodes"=>Array{Array{Int64,1},1}(undef, Nj),
                 "Incidence"=>Inc, "Prevalence"=>Prev)
     istart = 0
@@ -438,7 +437,7 @@ end
 
 """
 function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
-          isolation_network::LightGraphs.Graph)
+          isolation_network::Graph)
 
     #do testing if test day
     if i_day == sim["test_days"][sim["test_day_counter"]]
@@ -491,7 +490,7 @@ end
 
 """
 function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_params::Dict, i_day::Int,
-                               isolation_network::LightGraphs.Graph)
+                               isolation_network::Graph)
     will_isolate = detected[(sim["will_isolate_with_test"][detected])]
     isol_day = Int64.(round.(i_day + testing_params["delay"] .+ rand([0,0.5],length(will_isolate))))
     bool_update_isol_time = Bool.(((sim["isolation_time"][will_isolate] .== 0) .+
@@ -791,7 +790,7 @@ end
 
 
 function example_sim_loop!(sim::Dict, i_day::Int,  testing::Bool, TestParams::Dict,
-                           isolation_network::MetaGraphs.MetaGraph, Prev::Float64)
+                           isolation_network::Graph, Prev::Float64)
 
 #     #do_testing
 #     if testing
