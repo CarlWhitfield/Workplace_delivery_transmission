@@ -1050,7 +1050,7 @@ function create_isolation_network!(sim::Dict, IsolParams::Dict)
 end
 
 function setup_delivery_wp_model!(sim::Dict, Params::Dict, TestParams::Dict, OccPerDay::Array{Float64,1})
-    summary, i_day, Anyinf = setup_transmission_model!(sim, Params, TestParams, OccPerDay)
+    summary, i_day, Anyinf = setup_transmission_model!(sim, Params, TestParams, length(OccPerDay))
     summary["CustomersInfected"] = zeros(Int64,length(OccPerDay))
 
     return summary, i_day, Anyinf
