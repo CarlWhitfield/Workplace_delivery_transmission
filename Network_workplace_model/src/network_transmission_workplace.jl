@@ -31,8 +31,9 @@ const introduction = 6
 const pair_contact = 7
 const car_share = 8
 const house_share = 9
-const edge_colours = [colorant"red", colorant"red", colorant"green", colorant"orange",
-                      colorant"white",colorant"white",colorant"blue",colorant"lightgrey"]
+const edge_colours = [colorant"black", colorant"grey", colorant"green", colorant"orange",
+                      colorant"white", colorant"white", colorant"blue",colorant"red",
+                      colorant"pink"]
 
 
 #const per_person_office_volume = 20   #m^3
@@ -357,6 +358,7 @@ function apply_contact_mixing_params!(sim::Dict, Params::Dict)
             sim["contact_prob_mat"][i,j] = Params["phi"]*sim["contact_prob_mat"][i,j]
         end
     end
+    
     #norm = Params["tD"]*sim["N"][1]*((sim["N"][1]-1)/2 + Params["phi"]*
     #       (sim["N"][2] + sim["N"][3])) + sim["N"][2]*(sim["N"][2]-1)/2 +
     #       sim["N"][3]*(sim["N"][3]-1)/2 + Params["phi"]*sim["N"][2]*sim["N"][3]
@@ -922,12 +924,13 @@ function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int;
         w_rand = F2F_mod*return_infection_weight(x_rand, t_F2F_random, false, true)
         wl_room = SS_mod*return_infection_weight(room_sep_lunch, t_lunch, false, false)
         for (k, i) in enumerate(inf)
-            j = sim["job"][i]
+            j = sim["job"][i]  #job of infectious case
             contacts = Array{Int64,1}(undef,0)
-            for j0 in 1:3
-                p1 = sim["contact_prob_mat"][j,j0]
+            for j0 in 1:3   #job of potential contact
+                p1 = sim["contact_prob_mat"][j,j0]   #probability of contact
                 nwh = sim["job_sorted_nodes"][j0]
-                nwj0 = nwh[sim["at_work"][nwh]]
+                nwj0 = nwh[sim["at_work"][nwh]]    #reduce to those at work
+                
                 new_cs = randsubseq(nwj0,p1)
                 contacts = push!(contacts,new_cs...)
                 if (j==2 || j==3) && (j0 == 2 || j0 == 3)
@@ -1050,7 +1053,7 @@ function create_isolation_network!(sim::Dict, IsolParams::Dict)
 end
 
 function setup_delivery_wp_model!(sim::Dict, Params::Dict, TestParams::Dict, OccPerDay::Array{Float64,1})
-    summary, i_day, Anyinf = setup_transmission_model!(sim, Params, TestParams, OccPerDay)
+    summary, i_day, Anyinf = setup_transmission_model!(sim, Params, TestParams, length(OccPerDay))
     summary["CustomersInfected"] = zeros(Int64,length(OccPerDay))
 
     return summary, i_day, Anyinf
@@ -1074,7 +1077,7 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
                                F2F_mod=TransModifiers["F2F_mod"], SS_mod=TransModifiers["Aerosol_mod"])
     
     #do_testing
-    if TestParams["is_testing"]
+    if any(TestParams["is_testing"])
         new_isolators = do_testing!(sim, TestParams, i_day, sim["isolation_network"])
     end
 
@@ -1218,3 +1221,71 @@ end
 
 #List of modifiers
 # modifiers["indoor_contact"] (for package delivery)
+
+"""
+
+"""
+# function print_infection_network(sim::Dict, fname::String, infpairs::Array{Int64,2},
+#                                  x_pos::Array{Float64,1}, y_pos::Array{Float64,1},
+#                                  pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0))
+
+#     lg = LightGraphs.SimpleGraph(sim["Ntot"])
+#     if haskey(sim, "social_graph")
+#         ges = collect(Graphs.edges(sim["social_graph"]))
+#         LightGraphs.add_edge!.(Ref(lg), Graphs.source.(ges), Graphs.target.(ges))
+#     end
+#     # if length(pairs) > 0
+#     #     for i in 1:size(pairs,2)
+#     #         if !LightGraphs.has_edge(lg,pairs[1,i],pairs[2,i])
+#     #             LightGraphs.add_edge!(lg,pairs[1,i],pairs[2,i])
+#     #         end
+#     #     end
+#     # end
+#     for i in 1:size(infpairs,2)
+#         if !LightGraphs.has_edge(lg,infpairs[1,i],infpairs[2,i])
+#             LightGraphs.add_edge!(lg,infpairs[1,i],infpairs[2,i])
+#         end
+#     end
+
+#     mg = MetaGraphs.MetaGraph(lg)
+#     if haskey(sim, "social_graph")
+#         for e in ges
+#             set_prop!(mg, LightGraphs.Edge(Graphs.source(e), Graphs.target(e)), :color, length(edge_colours))
+#         end
+#     end
+#     # if length(pairs) > 0
+#     #     for i in 1:size(pairs,2)
+#     #         set_prop!(mg, LightGraphs.Edge(pairs[1,i], pairs[2,i]), :color, 2)
+#     #     end
+#     # end
+#     for i in 1:size(infpairs,2)
+#         if infpairs[1,i] > 0 &&  infpairs[2,i] > 0
+#             set_prop!(mg, LightGraphs.Edge(infpairs[1,i], infpairs[2,i]), :color, infpairs[3,i])
+#         end
+#     end
+#     ecolors = zeros(Int8,ne(lg))
+#     for (j,e) in enumerate(LightGraphs.edges(lg))
+#         ecolors[j] = get_prop(mg,e,:color)
+#     end
+#     #inflabels = 2 .* ones(Int8,sim["Ntot"])
+#     #inflabels[sim["infection_status"] .== Susc] .= 1
+#     #inflabels[sim["infection_status"] .== Recd] .= 3
+#     #here
+#     inflabels = inf_ref .* ones(Int8,sim["Ntot"])
+#     inflabels[sim["infection_status"] .== Susc] .= susceptible_ref
+#     inflabels[sim["infection_status"] .== Recd] .= recovered_ref
+#     inflabels[.!sim["at_work"]] .= not_at_work_ref
+#     inflabels[sim["isolation_status"]] .= isolating_ref
+
+
+#     draw(PNG(fname,19cm,19cm,dpi=150),gplot(lg, x_pos, y_pos,
+#                 nodefillc=inf_colours[inflabels],
+#                 #nodestrokec=inf_colours[infstrokes],
+#                 nodestrokelw=1.0,
+#                 nodelabel=job_labels[sim["job"]],
+#                 NODESIZE = 0.3/sqrt(sim["Ntot"]),
+#                 NODELABELSIZE = 3.0,
+#                 #nodelabel=1:sim["Ntot"],
+#                 #edgelabel=1:ne(lg),
+#                 edgestrokec=edge_colours[ecolors]))
+# end

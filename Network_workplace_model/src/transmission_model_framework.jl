@@ -5,8 +5,6 @@
 
 """
 
-
-
 #include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos_v2.jl")
 include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
@@ -25,6 +23,14 @@ const Susc = 0
 const Expd = 1
 const Symp = 2
 const Recd = 3
+
+#Isolation reasons
+const Suspected_Isol = 1
+const Confirmed_Isol = 2
+const SuspContact_Isol = 3
+const ConfContact_Isol = 4
+const NIsolStatuses = 4
+const IsolStatusNames = ["Symptomatic","Positive","SymptomContact","PositiveContact"]
 
 #Infection rates
 infection_rate_F2F = 0.15   #infectivity of F2F interactions per hour = microCOVID approx
@@ -91,21 +97,30 @@ function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psu
     Prev::Array{Float64,1})
     Ntot = sum(N_per_role)
     Nj = length(N_per_role)
+    Ndays = length(Inc)
     sim = Dict("Ntot"=>Ntot, "N"=>N_per_role, "job"=>zeros(Int8, Ntot),
                "Njobs"=>Nj, "inf_time"=>(zeros(Int64, Ntot) .- 1),
                 "symp_day"=>-ones(Int64, Ntot),
                 "asymptomatic"=>zeros(Bool, Ntot),
                 "would_isolate"=>zeros(Bool, Ntot),
-                "isolation_time"=>zeros(Int64, Ntot),
-                "isolation_status"=>zeros(Bool, Ntot),
-                "isolation_status_true_test"=>zeros(Bool, Ntot),
-                "isolation_status_false_test"=>zeros(Bool, Ntot),
-                "isolation_status_contact_true_test"=>zeros(Bool, Ntot),
-                "isolation_status_contact_false_test"=>zeros(Bool, Ntot),
-                "isolating_due_to_true_test"=>zeros(Bool, Ntot),
-                "isolating_due_to_false_test"=>zeros(Bool, Ntot),
-                "isolating_due_to_contact_true_test"=>zeros(Bool, Ntot),
-                "isolating_due_to_contact_false_test"=>zeros(Bool, Ntot),
+                "isolation_status"=>zeros(Int64, Ntot),
+                "isolation_start_day"=>zeros(Int64,(NIsolStatuses,Ntot)),
+                "isolation_end_day"=>zeros(Int64,(NIsolStatuses,Ntot)),
+        
+#                 "isolation_contactor"=>zeros(Int64, Ntot),
+#                 "isolation_contacts"=>Array{Array{Int64,1},1}(undef, Ntot),
+#                 "isolation_action"=>Array{Array{Int64,1},1}(undef, Ntot),
+#                 "isolation_action_day"=>Array{Array{Int64,1},1}(undef, Ntot),
+#                 "isolation_action_counter"=>ones(Int64,Ntot),
+                "new_isolators"=>Array{Int64,1}(undef, 0),
+#                 "isolation_status_true_test"=>zeros(Bool, Ntot),
+#                 "isolation_status_false_test"=>zeros(Bool, Ntot),
+#                 "isolation_status_contact_true_test"=>zeros(Bool, Ntot),
+#                 "isolation_status_contact_false_test"=>zeros(Bool, Ntot),
+#                 "isolating_due_to_true_test"=>zeros(Bool, Ntot),
+#                 "isolating_due_to_false_test"=>zeros(Bool, Ntot),
+#                 "isolating_due_to_contact_true_test"=>zeros(Bool, Ntot),
+#                 "isolating_due_to_contact_false_test"=>zeros(Bool, Ntot),
                 "susceptibility"=>ones(Float64,Ntot),
                 "VL_mag"=>zeros(Float64, Ntot),
                 "inf_mag"=>zeros(Float64, Ntot),
@@ -159,17 +174,55 @@ function infect_node!(sim::Dict, i::Int, time::Int)
     end
     sim["days_infectious"][i] = length(sim["infection_profiles"][i])
 
-    #if testing generate test positivity -- TODO
     if haskey(sim,"test_protocol")
        sim["test_pos_profiles"][i] = get_pos_profile(sim, i, sim["test_protocol"])
     end
 
-    #Sort out isolation
+    #Sort out symptomatic isolation and contact isolation
+    #Decide what happens with multiple statuses
     #Assume close contact isolation is guaranteed to isolate if infected node isolates (i.e. enforced)
     if will_isolate
+        isol_length = get_symp_isolation_days(sim, i)    #depends on confimatory PCR policy
+        if sim[isolation_status[i]] != Confirmed_Isol   
+            #this should almost always be the case, but if somebody is already isolated due to a (false)
+            #positive test, then they ignore their symptoms and continue with their isolation as before
+            ic = copy(sim["isolation_action_counter"][i])
+            ignore_symp_isol_start = false
+            ignore_symp_isol_end = false
+            if length(sim["isolation_action"][i] >= ic)   #find upcoming isolation actions 
+                while sim["isolation_action_day"][i][ic] < time + sim["symp_day"][i]
+                    #if sim["isolation_action"] is a confirmed case then ignore symp_isol
+                    if sim["isolation_action"][i] == Confirmed_Isol
+                        ignore_symp_isol_start == true
+                        ignore_symp_isol_end == true
+                    end
+                    ic += 1
+                end
+                while sim["isolation_action_day"][i][ic] < time + sim["symp_day"][i] + isol_length
+                    #if sim["isolation_action"] is a confirmed case then ignore symp_isol
+                    if sim["isolation_action"][i] == Confirmed_Isol
+                        ignore_symp_isol_end == true
+                    end
+                    ic += 1
+                end
+            end
+            if ignore_symp_isol_start == false
+                push!(sim["isolation_action_day"][i], time + sim["symp_day"][i])
+                push!(sim["isolation_action"][i], Suspected_Isol)
+            end
+            if ignore_symp_isol_end == false
+                push!(sim["isolation_action_day"][i], time + sim["symp_day"][i]) + isol_length
+                push!(sim["isolation_action"][i], 0)
+            end
+        
+        
+        
+        
+        
         if sim["isolation_time"][i] > time + sim["symp_day"][i] ||
            sim["isolation_time"][i] == 0 #might already be isolating
                sim["isolation_time"][i] = time + sim["symp_day"][i]
+               sim["isolation_reason"][i] = Suspected_Isol
         end
 #         print("Symp isol: ", i, ' ', time, ' ', sim["isolation_time"][i], '\n')
         traced = neighbors(contact_tracing_network, i)
@@ -180,10 +233,29 @@ function infect_node!(sim::Dict, i::Int, time::Int)
             #if not isolating already or isolating later than this
             if sum(to_update) > 0
                 sim["isolation_time"][traced[to_update]] .=  time + sim["symp_day"][i]
+                sim["isolation_reason"][traced[to_update]] .= SuspContact_Isol
+                sim["isolation_contactor"][traced[to_update]] .= i
+                sim["isolation_contacts"][i] = traced[to_update]   
             end
         end
     end
 end
+
+#Need to work out a better way to deal with isolations
+#Isolation status: True or False
+#Isolation time: If 0: never isolated, otherwise, last isolation start day (can isolate multiple times)
+#Isolation reason: Should exist for anybody with isolation time > 0. Options
+                #Suspected (symptoms, no test) -> Either isolate for 10-days or until conf PCR depending on policy
+                #Confirmed (positive test) -> If previously: no-status/close-contact status -> 10-day isolation from test-date
+                #                          -> If previously: suspected -> unchanged
+                #Close-Contact (policy defined) of (suspected + isolating) -> Either isolate or regularly test depending on policy
+                #Close-contact of confirmed case -> Either isolate or regularly test, depending on policy
+#Leaving isolation:
+                #Suspected (symptoms, no test) -> If PCR conf negative leave with some prob. (may still be ill)
+                #Confirmed -> After 10-days automatically, could have testing policy options
+                #Close-contact of suspected -> If PCR conf of index case negative
+                #Close-contact of confirmed -> 10-days or X-days + return to work PCR?
+#Need an option for individual testing
 
 function infect_random!(sim::Dict, InfInit::Int, i_day::Int)
     #infect from non infectious
@@ -250,9 +322,6 @@ function increment_infectivity!(sim::Dict, i_day::Int)
     #based on dates, stop infectivity
     nr = 1:sim["Ntot"]
     inf = nr[get_infected_bool(sim)]
-    # if length(inf) > 0
-    #     print(i_day, ' ', inf, '\n')
-    # end
     #people becoming Symptomatic (or asymptomatic)
     incend = inf[((i_day .- sim["inf_time"][inf]) .== sim["symp_day"][inf])]
     sim["infection_status"][incend] .= Symp
@@ -262,43 +331,22 @@ function increment_infectivity!(sim::Dict, i_day::Int)
 end
 
 function increment_isolations!(sim::Dict, i_day::Int)
-    nr = 1:sim["Ntot"]
-    #isolators
-    cond0 = (sim["isolation_time"] .> 0)
-    isolators = nr[cond0]
-    #isolating today (over-cautious definition)
-    cond1 = (sim["isolation_time"][isolators] .<= i_day) #isolation time today or before
-    cond2 = (sim["isolation_status"][isolators] .== false)   #not currently isolating
-    infisol = isolators[cond1 .* cond2]
-
-    sim["isolation_status"][infisol] .= true
-
-    is_true_test = sim["isolating_due_to_true_test"][infisol]
-    sim["isolation_status_true_test"][infisol[is_true_test]] .= true
-    sim["isolating_due_to_true_test"][infisol[is_true_test]] .= false #reset
-
-    is_true_contact_test = sim["isolating_due_to_contact_true_test"][infisol]
-    sim["isolation_status_contact_true_test"][infisol[is_true_contact_test]] .= true
-    sim["isolating_due_to_contact_true_test"][infisol[is_true_contact_test]] .= false #reset
-
-    is_false_test = sim["isolating_due_to_false_test"][infisol]
-    sim["isolation_status_false_test"][infisol[is_false_test]] .= true
-    sim["isolating_due_to_false_test"][infisol[is_false_test]] .= false #reset
-
-    is_false_contact_test = sim["isolating_due_to_contact_false_test"][infisol]
-    sim["isolation_status_contact_false_test"][infisol[is_false_contact_test]] .= true
-    sim["isolating_due_to_contact_false_test"][infisol[is_false_contact_test]] .= false #reset
-
-    #people leaving isolation
-    isols = nr[sim["isolation_status"] .== true]
-    isol_leavers = isols[(i_day  .- sim["isolation_time"][isols]) .== isol_time ]
-    sim["isolation_status"][isol_leavers] .= false
-    #reset flags
-    sim["isolation_time"][isol_leavers] .= 0   #can isolate again, even though recovered
-    sim["isolation_status_true_test"][isol_leavers] .= false
-    sim["isolation_status_false_test"][isol_leavers] .= false
-    sim["isolation_status_contact_true_test"][isol_leavers] .= false
-    sim["isolation_status_contact_false_test"][isol_leavers] .= false
+    nr = collect(1:sim["Ntot"])
+    sim["new_isolators"] = Array{Int64,1}(undef,0)
+    for i in nr[length.(sim["isolation_action_days"]) .<= sim["isolation_action_counter"]]  #loop over people with tests remaining
+        if i_day == sim["isolation_action_days"][i][sim["isolation_action_counter"][i]]
+            action = sim["isolation_action"][i][sim["isolation_action_counter"][i]]
+            #make a record of people entering isolation
+            if sim["isolation_status"][i] == 0 && action > 0
+                push!(sim["new_isolators"],i)
+            end
+            #update isolation status
+            sim["isolation_status"][i] = action
+            sim["isolation_action_counter"][i] += 1
+        end
+    end
+    
+    print("People in isolation: ", nr[sim["isolation_status"] .> 0],'\n')
 end
 
 """
@@ -423,15 +471,6 @@ function update_contact_network!(sim::Dict, new_network::MetaGraphs.MetaGraph)
     sim["contact_network"] = new_network
 end
 
-"""
-
-"""
-function update_testing_state!(sim::Dict, i_day::Int)
-    nr = 1:sim["Ntot"]
-    testing_paused = nr[sim["testing_paused"] .== true]
-    resume_testing = testing_paused[i_day .> sim["resume_testing"][testing_paused]]
-    sim["testing_paused"][resume_testing] .= false
-end
 
 """
 
@@ -440,24 +479,26 @@ function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
           isolation_network::Graph)
 
     #do testing if test day
-    if i_day == sim["test_days"][sim["test_day_counter"]]
-        #get all non susceptibles
-        nr = 1:sim["Ntot"]
-        update_testing_state!(sim, i_day)
-        bool_will_do_test = (sim["testing_paused"] .== false) .* sim["will_isolate_with_test"] .* 
-                            (sim["non_testers"] .== false)
-        bool_exposed = (sim["infection_status"] .!= Susc)
-        exposed = nr[bool_exposed]
+    nr = collect(1:sim["Ntot"])
+    i_testers = Array{Int64,1}(undef,0)
+    for i in nr[length.(sim["test_days"]) .<= sim["test_day_counter"]]  #loop over people with tests remaining
+        if i_day == sim["test_days"][i][sim["test_day_counter"][i]]
+            push!(i_testers,i)   #add people who will test today to this list
+        end
+    end
+    Ntesters = length(i_testers)
+    if Ntesters > 0        
+        print("Day: ", i_day, '\n')
+        bool_exposed = (sim["infection_status"][i_testers] .!= Susc)
+        exposed = i_testers[bool_exposed]
         should_be_positive = exposed[length.(sim["test_pos_profiles"][exposed]) .>
                                        i_day .- sim["inf_time"][exposed]]
-        pos_tests = zeros(Bool,sim["Ntot"])
+        print("Exposed: ", exposed,'\n')
+        print("Should be positive: ", should_be_positive,'\n')
+        pos_tests = zeros(Bool,Ntesters)
         #false positives due to specificity
         FPprob = (1-testing_params["specificity"])
-        if testing_params["testing_enforced"] == false
-            FPprob = FPprob * (1 - testing_params["test_miss_prob"])
-        end
-        false_pos = randsubseq(nr[bool_will_do_test], FPprob)
-        # print("Should test pos: ", should_be_positive,'\n')
+        false_pos = randsubseq(i_testers, FPprob)
         # print("False pos: ",false_pos,'\n')
         pos_tests[false_pos] .= true
         LP = length(should_be_positive)
@@ -465,20 +506,20 @@ function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
             pos_probs_exposed = zeros(LP)
             for (i,c) in enumerate(should_be_positive)
                 pos_probs_exposed[i] = sim["test_pos_profiles"][c][1 + i_day - sim["inf_time"][c]]
-                if bool_will_do_test[c] == false
-                    pos_probs_exposed[i] = 0  #people who don't do test will not test positive
-                end
             end
             #print(pos_probs_exposed,'\n')
             # print("Pos prob: ", pos_probs_exposed, '\n')
             true_pos = should_be_positive[rand(LP) .< pos_probs_exposed]
             pos_tests[true_pos] .= true
         end
+        print("Positive: ", i_testers[pos_tests],'\n')
         # print("Pos tests: ",nr[pos_tests],'\n')
 
-        isolators = apply_positive_tests!(sim, nr[pos_tests], testing_params, i_day, isolation_network)
-
-        sim["test_day_counter"] += 1
+        isolators = apply_positive_tests!(sim, i_testers[pos_tests], testing_params, i_day, isolation_network)
+        
+        print("Isolators: ", isolators, '\n')
+        
+        sim["test_day_counter"][i_testers] .= sim["test_day_counter"][i_testers] .+ 1
 
         return isolators
     else
@@ -525,80 +566,16 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
             end
         end
         will_isolate = unique(vcat(will_isolate, dests))
-
-        sim["testing_paused"][will_isolate] .= true
-        sim["resume_testing"][will_isolate] .= i_day + testing_params["test_pause"]
+        #remove all scheduled tests in pause window
+        for i in will_isolate 
+            bool_elements = (sim["test_days"][i] .> i_day) & 
+                            (sim["test_days"][i] .<= i_day + testing_params["test_pause"])
+            i_elements = collect(1:length(sim["test_days"][i]))
+            deleteat!(sim["test_days"][i],i_elements[bool_elements])
+        end
     end
     return will_isolate
 end
-
-"""
-
-"""
-# function print_infection_network(sim::Dict, fname::String, infpairs::Array{Int64,2},
-#                                  x_pos::Array{Float64,1}, y_pos::Array{Float64,1},
-#                                  pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0))
-
-#     lg = LightGraphs.SimpleGraph(sim["Ntot"])
-#     if haskey(sim, "social_graph")
-#         ges = collect(Graphs.edges(sim["social_graph"]))
-#         LightGraphs.add_edge!.(Ref(lg), Graphs.source.(ges), Graphs.target.(ges))
-#     end
-#     # if length(pairs) > 0
-#     #     for i in 1:size(pairs,2)
-#     #         if !LightGraphs.has_edge(lg,pairs[1,i],pairs[2,i])
-#     #             LightGraphs.add_edge!(lg,pairs[1,i],pairs[2,i])
-#     #         end
-#     #     end
-#     # end
-#     for i in 1:size(infpairs,2)
-#         if !LightGraphs.has_edge(lg,infpairs[1,i],infpairs[2,i])
-#             LightGraphs.add_edge!(lg,infpairs[1,i],infpairs[2,i])
-#         end
-#     end
-
-#     mg = MetaGraphs.MetaGraph(lg)
-#     if haskey(sim, "social_graph")
-#         for e in ges
-#             set_prop!(mg, LightGraphs.Edge(Graphs.source(e), Graphs.target(e)), :color, length(edge_colours))
-#         end
-#     end
-#     # if length(pairs) > 0
-#     #     for i in 1:size(pairs,2)
-#     #         set_prop!(mg, LightGraphs.Edge(pairs[1,i], pairs[2,i]), :color, 2)
-#     #     end
-#     # end
-#     for i in 1:size(infpairs,2)
-#         if infpairs[1,i] > 0 &&  infpairs[2,i] > 0
-#             set_prop!(mg, LightGraphs.Edge(infpairs[1,i], infpairs[2,i]), :color, infpairs[3,i])
-#         end
-#     end
-#     ecolors = zeros(Int8,ne(lg))
-#     for (j,e) in enumerate(LightGraphs.edges(lg))
-#         ecolors[j] = get_prop(mg,e,:color)
-#     end
-#     #inflabels = 2 .* ones(Int8,sim["Ntot"])
-#     #inflabels[sim["infection_status"] .== Susc] .= 1
-#     #inflabels[sim["infection_status"] .== Recd] .= 3
-#     #here
-#     inflabels = inf_ref .* ones(Int8,sim["Ntot"])
-#     inflabels[sim["infection_status"] .== Susc] .= susceptible_ref
-#     inflabels[sim["infection_status"] .== Recd] .= recovered_ref
-#     inflabels[.!sim["at_work"]] .= not_at_work_ref
-#     inflabels[sim["isolation_status"]] .= isolating_ref
-
-
-#     draw(PNG(fname,19cm,19cm,dpi=150),gplot(lg, x_pos, y_pos,
-#                 nodefillc=inf_colours[inflabels],
-#                 #nodestrokec=inf_colours[infstrokes],
-#                 nodestrokelw=1.0,
-#                 nodelabel=job_labels[sim["job"]],
-#                 NODESIZE = 0.3/sqrt(sim["Ntot"]),
-#                 NODELABELSIZE = 3.0,
-#                 #nodelabel=1:sim["Ntot"],
-#                 #edgelabel=1:ne(lg),
-#                 edgestrokec=edge_colours[ecolors]))
-# end
 
 """
 
@@ -672,43 +649,28 @@ end
 """
 function update_sim_summary!(summary::Dict, sim::Dict, inf_pairs::Array{Int64,2}, i_day::Int)
     nr = 1:sim["Ntot"]
-    new_isolator_bool = sim["isolation_status"] .* (sim["isolation_time"] .== i_day)
-    isol_no_test = (sim["isolation_status"] .- sim["isolation_status_true_test"] .-
-                   sim["isolation_status_false_test"] .- sim["isolation_status_contact_true_test"] .-
-                   sim["isolation_status_contact_false_test"])
-    after_onset_bool = (sim["infection_status"] .== Symp)
-    at_work_bool = (sim["at_work"] .== true)
+    new_isolator_bool =  zeros(Bool,nr)
+    new_isolator_bool[sim["new_isolators"]] .= true
+    at_work_bool = (sim["at_work"] .== true)  
+    after_onset_bool = (sim["infection_status"] .== Symp)  #after symptom onset time (which they have even if asymptomatic)
     for j in 1:sim["Njobs"]
-        jt = (sim["job"] .== j)  #update this
+        jt = nr[sim["job"] .== j]  #update this
 
-        summary["Susceptible"][j,i_day] = sum(jt .* (sim["infection_status"] .== Susc))
-        summary["Recovered"][j,i_day] = sum(jt .* (sim["infection_status"] .== Recd))
-        summary["Infectious"][j,i_day] = (sum(jt) - summary["Susceptible"][j,i_day]
-                                         - summary["Recovered"][j,i_day])
-        summary["Exposed"][j,i_day] = sum(jt .* (sim["infection_status"] .== Expd))
-        summary["Isolated"][j,i_day] = sum(jt .* sim["isolation_status"])
-        summary["NewIsolators"][j,i_day] = sum(jt .* new_isolator_bool)
-
-
-        summary["IsolatedDueToSymptoms"][j,i_day] = sum(jt .* isol_no_test)
-        summary["IsolatedDueToTestAsymp"][j,i_day] = sum(jt .* sim["isolation_status_true_test"] .* sim["asymptomatic"])
-        summary["IsolatedDueToTestSymp"][j,i_day] = sum(jt .* sim["isolation_status_true_test"] .* .!(sim["asymptomatic"]))
-        summary["IsolatedDueToFalsePos"][j,i_day] = sum(jt .* sim["isolation_status_false_test"])
-        summary["IsolatedDueToContactTruePos"][j,i_day] = sum(jt .* sim["isolation_status_contact_true_test"])
-        summary["IsolatedDueToContactFalsePos"][j,i_day] = sum(jt .* sim["isolation_status_contact_false_test"])
-
-        summary["NewSympIsolators"][j,i_day] = sum(jt .* isol_no_test .* new_isolator_bool)
-        summary["NewTestAsympIsolators"][j,i_day] = sum(jt .* sim["isolation_status_true_test"] .*
-                                                new_isolator_bool .* sim["asymptomatic"])
-        summary["NewTestSympIsolators"][j,i_day] = sum(jt .* sim["isolation_status_true_test"] .*
-                                                new_isolator_bool .* .!(sim["asymptomatic"]))
-        summary["NewFalseIsolators"][j,i_day] = sum(jt .* sim["isolation_status_false_test"] .* new_isolator_bool)
-        summary["NewContactTruePosIsolators"][j,i_day] = sum(jt .* sim["isolation_status_contact_true_test"] .*
-                                                         new_isolator_bool)
-        summary["NewContactFalsePosIsolators"][j,i_day] = sum(jt .* sim["isolation_status_contact_false_test"] .*
-                                                         new_isolator_bool)
-
-        summary["Presenting"][j,i_day] = sum(jt .* after_onset_bool .* at_work_bool)
+        summary["Susceptible"][j,i_day] = sum(sim["infection_status"][jt] .== Susc)
+        summary["Recovered"][j,i_day] = sum(sim["infection_status"][jt] .== Recd)
+        summary["Infectious"][j,i_day] = length(jt) - summary["Susceptible"][j,i_day]
+                                                    - summary["Recovered"][j,i_day])
+        summary["Exposed"][j,i_day] = sum(sim["infection_status"][jt] .== Expd)
+        summary["Isolated"][j,i_day] = sum(sim["isolation_status"][jt] .> 0)
+        summary["NewIsolators"][j,i_day] = sum(new_isolator_bool[jt])
+        
+        for n in 1:NIsolStatuses
+            name = "Isolated" + IsolStatusNames[n]
+            summary[name][j,i_day] = sum(sim["isolation_status"][jt] .== n)
+            name2 = "New" + IsolStatusNames[n] + "Isolators"
+            summary[name2][j,i_day] = sum((sim["isolation_status"][jt] .== n).*new_isolator_bool[jt])
+        end
+        summary["Presenting"][j,i_day] = sum(jt .* after_onset_bool .* (sim["asymptomatic"].==false) .* at_work_bool)
         summary["Asymptomatic"][j,i_day] = sum(jt .* after_onset_bool .* sim["asymptomatic"])
     end
 
@@ -763,14 +725,14 @@ function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict,
     if any(TestParams["is_testing"])
         if (TestParams["protocol"] == PCR_mass_protocol
          || TestParams["protocol"] == LFD_mass_protocol)
-             sim["test_days"], sim["test_day_counter"] =
-                     init_testing!(sim, TestParams, i_day, NDays; fill_pos_profiles=false)
             sim["non_testers"] = zeros(Int,sim["Ntot"])
             for j in 1:sim["Njobs"]
                 if TestParams["is_testing"][j] == false
                     sim["non_testers"][sim["job_sorted_nodes"][j]] .= true
                 end
             end
+            sim["test_days"], sim["test_day_counter"] =
+                     init_testing!(sim, TestParams, i_day, NDays; fill_pos_profiles=false)
         end  #add options for other protocols here
     else
         sim["test_day_counter"] = 1
