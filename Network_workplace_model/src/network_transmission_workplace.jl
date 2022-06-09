@@ -67,6 +67,7 @@ const ParcelTimesPerDelivery = Dict("t_cabin"=>1.0/12.0,"t_doorstep"=>1/120.0, "
                                 "t_picking"=>1.0/60.0)
 const BulkTimesPerDelivery = Dict("t_cabin"=>1.0/6.0, "t_doorstep"=>1.0/12.0, 
                                   "t_handling"=>1.0/12.0, "t_picking"=>1.0/6.0)
+const TypicalContactTalkingFrac = 0.25    #spend about 1/4 of time talking (2-way so half the time talking)
 const job_labels = ["D","L","O"]
 const job_names = ["Drivers","Pickers","Other"]
 const job_colours = [colorant"blue",colorant"orange",colorant"green"]
@@ -114,7 +115,7 @@ function get_team_edge_weight(team::Array{Int64,1}, modifiers::Dict)
     #assume contacts are one-to-one, total time is preserved
     edge_weight = return_infection_weight(modifiers["distance"],
        modifiers["rel_time"] / (length(team) - 1),
-        modifiers["outside"], true)
+        modifiers["outside"], TypicalContactTalkingFrac)
 
     return edge_weight
 end
@@ -207,7 +208,7 @@ function generate_cohort_graph!(sim::Dict, Nteams::Array{Int64,1}, TeamF2FTime::
             w = F2F_mod*get_team_edge_weight(teams[Ntstart+n], Dict("outside"=>outside[j],
                            "distance"=>distance[j],"rel_time"=>TeamF2FTime[j]))
             if j == 3
-                w += SS_mod*return_infection_weight(room_sep_office, t_office, false, false)
+                w += SS_mod*return_infection_weight(room_sep_office, t_office, false, 0.0)
             end
             add_cohort_to_graph!(team_graph, teams[Ntstart+n], w)
         end
@@ -247,7 +248,7 @@ function shuffle_cohorts!(sim::Dict, p_s::Float64, Nteams::Array{Int64,1}, TeamF
             w_old = F2F_mod*get_team_edge_weight(old_cohort, Dict("outside"=>outside[j],
                            "distance"=>distance[j],"rel_time"=>TeamF2FTime[j]))
             if j == 3
-                w_old += SS_mod*return_infection_weight(room_sep_office, t_office, false, false)
+                w_old += SS_mod*return_infection_weight(room_sep_office, t_office, false, 0.0)
             end
             update_cohort_edge_weight!(sim["cohort_network"], old_cohort, w_old)
 
@@ -260,7 +261,7 @@ function shuffle_cohorts!(sim::Dict, p_s::Float64, Nteams::Array{Int64,1}, TeamF
                     Dict("outside"=>outside[j], "distance"=>distance[j],
                     "rel_time"=>TeamF2FTime[j]))
             if j == 3
-                w_new += SS_mod*return_infection_weight(room_sep_office, t_office, false, false)
+                w_new += SS_mod*return_infection_weight(room_sep_office, t_office, false, 0.0)
             end
             update_cohort_edge_weight!(sim["cohort_network"], sim["cohorts"][j][new_team], w_new)
         end
@@ -275,7 +276,7 @@ function generate_car_share_and_house_share_graphs!(sim::Dict, HomeParams::Dict;
     sim["car_share_network"] = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))
     sim["house_share_network"] = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))
     w_house_share = hh_infection_rate_pd
-    w_car_share = F2F_mod*return_infection_weight(1.0, t_car_share, false, false)
+    w_car_share = F2F_mod*return_infection_weight(1.0, t_car_share, false, TypicalContactTalkingFrac)
 
     nr = collect(1:sim["Ntot"])
     nr_rand = shuffle(nr)
@@ -580,22 +581,20 @@ function get_pair_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams
         #component for delivery time
         exp_per_assign = F2F_mod*return_infection_weight(1.0,
             sim["contact_times"]["t_handling"] + sim["contact_times"]["t_doorstep"],
-            true, false)
+            true, TypicalContactTalkingFrac)
 
         #add component for cabin time
         exp_per_assign += F2F_mod*return_infection_weight(1.0, sim["contact_times"]["t_cabin"],
-                     PairParams["is_window_open"], false)
+                     PairParams["is_window_open"], TypicalContactTalkingFrac)
         add_cohort_to_graph!.(Ref(sim["driver_pair_network"]), pairs, NPassignments .* exp_per_assign)
-        print(NPassignments, ' ', exp_per_assign, '\n')
     end
 
     if job == 2
         pairs, NPassignments = select_pairs!(sim, occ, PairParams["fixed_loader_pairs"], job, 
                                              Ncons, AbsRate)
         exp_per_assign = F2F_mod*return_infection_weight(1.0,
-            sim["contact_times"]["t_picking"], true, false)
+            sim["contact_times"]["t_picking"], true, TypicalContactTalkingFrac)
         add_cohort_to_graph!.(Ref(sim["loader_pair_network"]), pairs, NPassignments .* exp_per_assign)
-        print(NPassignments, ' ', exp_per_assign, '\n')
     end
 
 
@@ -765,9 +764,9 @@ function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
         #InfDriverPos contains their position in AllDrivers which is an array of arrays
         #NADrivers is the number of items assigned to each working group in AllDrivers
         out_weight = F2F_mod*return_infection_weight(modifiers["distance"],
-                    sim["contact_times"]["t_doorstep"],true, true)
+                    sim["contact_times"]["t_doorstep"],true, TypicalContactTalkingFrac)
         in_weight = F2F_mod*return_infection_weight(modifiers["distance"],
-                    sim["contact_times"]["t_doorstep"],false, true)
+                    sim["contact_times"]["t_doorstep"],false, TypicalContactTalkingFrac)
         doorstep_weight = modifiers["outdoor_contact_frac"] * out_weight
          + (1-modifiers["outdoor_contact_frac"]) * in_weight
 
@@ -921,8 +920,8 @@ function generate_random_contact_networks!(sim::Dict, Params::Dict, i_day::Int;
         #nw = nr[sim["at_work"]]
         #nw in work
         #j0 = sim["job"][nw]          #j0 is jobs of in work
-        w_rand = F2F_mod*return_infection_weight(x_rand, t_F2F_random, false, true)
-        wl_room = SS_mod*return_infection_weight(room_sep_lunch, t_lunch, false, false)
+        w_rand = F2F_mod*return_infection_weight(x_rand, t_F2F_random, false, TypicalContactTalkingFrac)
+        wl_room = SS_mod*return_infection_weight(room_sep_lunch, t_lunch, false, 0.0)
         for (k, i) in enumerate(inf)
             j = sim["job"][i]
             contacts = Array{Int64,1}(undef,0)
@@ -950,9 +949,9 @@ function get_customer_introductions(sim::Dict, i_day::Int,
     pinf = zeros(Float64, sim["N"][1])
 
     out_weight = F2F_mod*return_infection_weight(1.0,
-                    sim["contact_times"]["t_doorstep"],true,true)
+                    sim["contact_times"]["t_doorstep"],true,TypicalContactTalkingFrac)
     in_weight = F2F_mod*return_infection_weight(1.0,
-                    sim["contact_times"]["t_doorstep"],false,true)
+                    sim["contact_times"]["t_doorstep"],false,TypicalContactTalkingFrac)
 
     ppd = modifiers["outdoor_contact_frac"] * out_weight
          + (1-modifiers["outdoor_contact_frac"]) * in_weight

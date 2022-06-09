@@ -36,13 +36,13 @@ const distance_factor_per_m = 0.5
 
 #P_inf = 1 - exp(-w(t,x)) -- this function returns w
 function return_infection_weight(distance::Float64, duration::Float64,
-                                 outdoor::Bool, talking::Bool)
+                                 outdoor::Bool, talking_frac::Float64)
     w = infection_rate_F2F * duration * (distance_factor_per_m^(distance-1.0))
     if outdoor
         w = w * outside_factor
     end
     if talking == false
-        w = w * no_talking_factor
+        w = (talking_frac + (1 - talking_frac) * no_talking_factor) * w
     end
 
     return w
