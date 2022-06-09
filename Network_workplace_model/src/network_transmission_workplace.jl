@@ -66,7 +66,7 @@ const room_sep_office = 1 + log(no_talking_factor * infection_rate_F2F / (Breath
 const ParcelTimesPerDelivery = Dict("t_cabin"=>1.0/12.0,"t_doorstep"=>1/120.0, "t_handling"=>1/60.0,
                                 "t_picking"=>1.0/60.0)
 const BulkTimesPerDelivery = Dict("t_cabin"=>1.0/6.0, "t_doorstep"=>1.0/12.0, 
-                                  "t_handling"=>1.0/12.0, "t_picking"=>1.0/12.0)
+                                  "t_handling"=>1.0/12.0, "t_picking"=>1.0/6.0)
 const job_labels = ["D","L","O"]
 const job_names = ["Drivers","Pickers","Other"]
 const job_colours = [colorant"blue",colorant"orange",colorant"green"]
@@ -586,6 +586,7 @@ function get_pair_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams
         exp_per_assign += F2F_mod*return_infection_weight(1.0, sim["contact_times"]["t_cabin"],
                      PairParams["is_window_open"], false)
         add_cohort_to_graph!.(Ref(sim["driver_pair_network"]), pairs, NPassignments .* exp_per_assign)
+        print(NPassignments, ' ', exp_per_assign, '\n')
     end
 
     if job == 2
@@ -594,6 +595,7 @@ function get_pair_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams
         exp_per_assign = F2F_mod*return_infection_weight(1.0,
             sim["contact_times"]["t_picking"], true, false)
         add_cohort_to_graph!.(Ref(sim["loader_pair_network"]), pairs, NPassignments .* exp_per_assign)
+        print(NPassignments, ' ', exp_per_assign, '\n')
     end
 
 
@@ -648,13 +650,13 @@ function reset_daily_contact_networks!(sim::Dict)
     sim["room_contact_network"] = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))
 end
 
-function add_to_pair_contacts_network!(sim::Dict, source::Int64, dest::Int64, weight::Float64)
-    if sim["job"][source] == 1
-        set_prop!(sim["driver_pair_network"], source, dest, :weight, weight)
-    else
-        set_prop!(sim["loader_pair_network"], source, dest, :weight, weight)
-    end
-end
+# function add_to_pair_contacts_network!(sim::Dict, source::Int64, dest::Int64, weight::Float64)
+#     if sim["job"][source] == 1
+#         set_prop!(sim["driver_pair_network"], source, dest, :weight, weight)
+#     else
+#         set_prop!(sim["loader_pair_network"], source, dest, :weight, weight)
+#     end
+# end
 
 #send list of packages that could be infected to this function
 #with a list of source and destination nodes for each
