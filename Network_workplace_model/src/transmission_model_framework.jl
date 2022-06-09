@@ -10,13 +10,19 @@
 #include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos_v2.jl")
 include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
+#change VL + testing model options here
+#VL_model = ke_model_no         #choice of viral load model (Ke et al is default)
+LFD_model = porton_down         #choice of LFD sensitivity model (social care binned 2021 data is default)
+#PCR_sens_max = 0.83            #max PCR sensitivity (Ferretti et al 2021)
+#Inf_model = ke_inf_model_no    #infectivity model
+#p_asymp = 0.5                  #asymptomatic fraction
+
 using Graphs
 using MetaGraphs
 
 #sim type definitions
 const Outbreak_sim = 1
 const Scenario_sim = 2
-
 
 const isol_time = 10
 
