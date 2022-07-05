@@ -4,15 +4,12 @@
 
 
 """
-
-
-
 #include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos_v2.jl")
 include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
 #change VL + testing model options here
 #VL_model = ke_model_no         #choice of viral load model (Ke et al is default)
-LFD_model = porton_down         #choice of LFD sensitivity model (social care binned 2021 data is default)
+#LFD_model = porton_down         #choice of LFD sensitivity model (social care binned 2021 data is default)
 #PCR_sens_max = 0.83            #max PCR sensitivity (Ferretti et al 2021)
 #Inf_model = ke_inf_model_no    #infectivity model
 #p_asymp = 0.5                  #asymptomatic fraction
@@ -40,15 +37,29 @@ const mask_factor_infector = 0.25
 const mask_factor_infectee = 0.5
 const distance_factor_per_m = 0.5
 
+# #P_inf = 1 - exp(-w(t,x)) -- this function returns w
+# function return_infection_weight(distance::Float64, duration::Float64,
+#                                  outdoor::Bool, talking_frac::Float64)
+#     w = infection_rate_F2F * duration * (distance_factor_per_m^(distance-1.0))
+#     if outdoor
+#         w = w * outside_factor
+#     end
+#     if talking == false
+#         w = (talking_frac + (1 - talking_frac) * no_talking_factor) * w
+#     end
+#
+#     return w
+# end
+
 #P_inf = 1 - exp(-w(t,x)) -- this function returns w
 function return_infection_weight(distance::Float64, duration::Float64,
-                                 outdoor::Bool, talking_frac::Float64)
+                                 outdoor::Bool, talking::Bool)
     w = infection_rate_F2F * duration * (distance_factor_per_m^(distance-1.0))
     if outdoor
         w = w * outside_factor
     end
     if talking == false
-        w = (talking_frac + (1 - talking_frac) * no_talking_factor) * w
+        w = no_talking_factor * w
     end
 
     return w
@@ -117,7 +128,7 @@ function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psu
                 "inf_mag"=>zeros(Float64, Ntot),
                 "infection_profiles"=>Array{Array{Float64,1},1}(undef,Ntot),
                 "VL_profiles"=>Array{Array{Float64,1},1}(undef,Ntot),
-                "at_work"=>zeros(Bool, Ntot),
+                "at_work"=>ones(Bool, Ntot),
                 "infection_status"=>zeros(Int8,Ntot),
                 "days_infectious" => zeros(Int64,Ntot),
                 "contact_network" => MetaGraphs.MetaGraph(SimpleGraph(Ntot)),
@@ -151,7 +162,7 @@ function infect_node!(sim::Dict, i::Int, time::Int)
     else
         contact_tracing_network = SimpleGraph(sim["Ntot"])
     end
-    
+
     sim["infection_status"][i] = Expd
     sim["susceptibility"][i] = 0.0
     sim["inf_time"][i] = time
@@ -165,7 +176,6 @@ function infect_node!(sim::Dict, i::Int, time::Int)
     end
     sim["days_infectious"][i] = length(sim["infection_profiles"][i])
 
-    #if testing generate test positivity -- TODO
     if haskey(sim,"test_protocol")
        sim["test_pos_profiles"][i] = get_pos_profile(sim, i, sim["test_protocol"])
     end
@@ -310,7 +320,7 @@ end
 """
 
 """
-function get_introductions(sim::Dict, i_day::Int, introduction_ID::Int; 
+function get_introductions(sim::Dict, i_day::Int, introduction_ID::Int;
                            rel_rates::Array{Float64,1} = ones(sim["Njobs"]))
     #doesn't matter if individual is in work or not
     iprob = zeros(sim["Ntot"])
@@ -325,8 +335,8 @@ function get_introductions(sim::Dict, i_day::Int, introduction_ID::Int;
         infpairs = [transpose(zeros(Int64,NI)); transpose(newinfs);
                        introduction_ID*transpose(ones(Int64,NI))]
     end
-    
-    
+
+
     return infpairs
 end
 
@@ -356,7 +366,7 @@ function get_network_infections(sim::Dict, i_day::Int)
         #get the edge weights (total transmission rate * contact time, can be multiple per edge)
         w = get_prop.(Ref(sim["contact_network"]),nin,nout,:weights)
         t = get_prop.(Ref(sim["contact_network"]),nin,nout,:types)
-    
+
         #fill and flatten all arrays so there is one entry for each entry
         nin_all = vcat(fill.(nin,length.(w))...)
         nout_all = vcat(fill.(nout,length.(w))...)
@@ -450,7 +460,7 @@ function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
         #get all non susceptibles
         nr = 1:sim["Ntot"]
         update_testing_state!(sim, i_day)
-        bool_will_do_test = (sim["testing_paused"] .== false) .* sim["will_isolate_with_test"] .* 
+        bool_will_do_test = (sim["testing_paused"] .== false) .* sim["will_isolate_with_test"] .*
                             (sim["non_testers"] .== false)
         bool_exposed = (sim["infection_status"] .!= Susc)
         exposed = nr[bool_exposed]
@@ -722,7 +732,7 @@ function update_sim_summary!(summary::Dict, sim::Dict, inf_pairs::Array{Int64,2}
         j = sim["job"][inf_pairs[2,k]]  #job of infectee
         summary["InfsByType"][inf_pairs[3,k]][j,i_day] += 1
     end
-    
+
     if haskey(summary,"IndexCase")
         summary["IndexCaseInfections"] += sum(inf_pairs[1,:] .== summary["IndexCase"])
     end
@@ -766,6 +776,7 @@ end
 function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict,
                                    NDays::Int)
     i_day = rand(1:7)
+    sim["NTypes"] = Params["NContactTypes"]
     if any(TestParams["is_testing"])
         if (TestParams["protocol"] == PCR_mass_protocol
          || TestParams["protocol"] == LFD_mass_protocol)
@@ -864,4 +875,18 @@ function run_example_sim(Params::Dict; visualise::Bool = false, testing::Bool=fa
 #     trim_sim_summary!(sim_summary, i_day-1, length(OccPerDay))
 
 #     return sim_summary
+end
+
+function add_contact_to_contact_network!(sim::Dict, source::Int, dest::Int,
+                                      weight::Float64, type::Int)
+    if has_edge(sim["contact_network"], source, dest)
+        wvec = get_prop(sim["contact_network"], source, dest, :weights)
+        tvec = get_prop(sim["contact_network"], source, dest, :types)
+        wvec = set_prop!(sim["contact_network"], source, dest, :weights, push!(wvec,weight))
+        tvec = set_prop!(sim["contact_network"], source, dest, :types, push!(tvec,type))
+    else
+        add_edge!(sim["contact_network"], source, dest)
+        set_prop!(sim["contact_network"], source, dest, :weights, [weight])
+        set_prop!(sim["contact_network"], source, dest, :types, [type])
+    end
 end
