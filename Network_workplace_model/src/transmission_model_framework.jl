@@ -104,8 +104,8 @@ Initialises the transmission model.
 
 `sim::Dict()` = Framework for storing simulation data, to be passed to other functions
 """
-function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psusc::Float64, Inc::Array{Float64,1},
-    Prev::Array{Float64,1})
+function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psusc::Float64, 
+        Inc::Array{Float64,1}, Prev::Array{Float64,1})
     Ntot = sum(N_per_role)
     Nj = length(N_per_role)
     sim = Dict("Ntot"=>Ntot, "N"=>N_per_role, "job"=>zeros(Int8, Ntot),
@@ -366,7 +366,7 @@ function get_network_infections(sim::Dict, i_day::Int)
         #get the edge weights (total transmission rate * contact time, can be multiple per edge)
         w = get_prop.(Ref(sim["contact_network"]),nin,nout,:weights)
         t = get_prop.(Ref(sim["contact_network"]),nin,nout,:types)
-
+        
         #fill and flatten all arrays so there is one entry for each entry
         nin_all = vcat(fill.(nin,length.(w))...)
         nout_all = vcat(fill.(nout,length.(w))...)
@@ -456,45 +456,41 @@ function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
           isolation_network::Graph)
 
     #do testing if test day
-    if i_day == sim["test_days"][sim["test_day_counter"]]
-        #get all non susceptibles
-        nr = 1:sim["Ntot"]
-        update_testing_state!(sim, i_day)
-        bool_will_do_test = (sim["testing_paused"] .== false) .* sim["will_isolate_with_test"] .*
-                            (sim["non_testers"] .== false)
-        bool_exposed = (sim["infection_status"] .!= Susc)
-        exposed = nr[bool_exposed]
-        should_be_positive = exposed[length.(sim["test_pos_profiles"][exposed]) .>
-                                       i_day .- sim["inf_time"][exposed]]
+    nr = 1:sim["Ntot"]
+    bool_will_do_test = (sim["testing_paused"] .== false) .* sim["will_isolate_with_test"] .*
+                        (sim["non_testers"] .== false)
+    all_testers = nr[bool_will_do_test]
+    bool_will_test_today = zeros(Bool,sim["Ntot"])
+    for i in all_testers
+        if i_day == sim["test_days"][i][sim["test_day_counter"][i]]
+            bool_will_test_today[i] = true
+        end
+    end
+    testers = nr[bool_will_test_today]
+    if length(testers) > 0
         pos_tests = zeros(Bool,sim["Ntot"])
+        bool_exposed_testers = (sim["infection_status"][testers] .!= Susc)
+        exposed_testers = testers[bool_exposed_testers]
+        should_test_positive = exposed_testers[length.(
+                sim["test_pos_profiles"][exposed_testers]) .>
+                                       i_day .- sim["inf_time"][exposed_testers]]
         #false positives due to specificity
         FPprob = (1-testing_params["specificity"])
-        if testing_params["testing_enforced"] == false
-            FPprob = FPprob * (1 - testing_params["test_miss_prob"])
-        end
-        false_pos = randsubseq(nr[bool_will_do_test], FPprob)
-        # print("Should test pos: ", should_be_positive,'\n')
-        # print("False pos: ",false_pos,'\n')
+        false_pos = randsubseq(nr[bool_will_test_today], FPprob)
         pos_tests[false_pos] .= true
-        LP = length(should_be_positive)
+        LP = length(should_test_positive)
         if LP > 0
             pos_probs_exposed = zeros(LP)
-            for (i,c) in enumerate(should_be_positive)
+            for (i,c) in enumerate(should_test_positive)
                 pos_probs_exposed[i] = sim["test_pos_profiles"][c][1 + i_day - sim["inf_time"][c]]
-                if bool_will_do_test[c] == false
-                    pos_probs_exposed[i] = 0  #people who don't do test will not test positive
-                end
             end
-            #print(pos_probs_exposed,'\n')
-            # print("Pos prob: ", pos_probs_exposed, '\n')
-            true_pos = should_be_positive[rand(LP) .< pos_probs_exposed]
+            true_pos = should_test_positive[rand(LP) .< pos_probs_exposed]
             pos_tests[true_pos] .= true
         end
-        # print("Pos tests: ",nr[pos_tests],'\n')
-
+        
         isolators = apply_positive_tests!(sim, nr[pos_tests], testing_params, i_day, isolation_network)
 
-        sim["test_day_counter"] += 1
+        sim["test_day_counter"][testers] .= sim["test_day_counter"][testers] .+ 1
 
         return isolators
     else
@@ -508,7 +504,8 @@ end
 function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_params::Dict, i_day::Int,
                                isolation_network::Graph)
     will_isolate = detected[(sim["will_isolate_with_test"][detected])]
-    isol_day = Int64.(round.(i_day + testing_params["delay"] .+ rand([0,0.5],length(will_isolate))))
+    #isol_day = Int64.(round.(i_day + testing_params["delay"] .+ rand([0,0.5],length(will_isolate))))
+    isol_day = Int64.(round.(i_day + testing_params["delay"])).*ones(Int64,length(will_isolate))
     bool_update_isol_time = Bool.(((sim["isolation_time"][will_isolate] .== 0) .+
                                    (sim["isolation_time"][will_isolate] .> isol_day)))
     to_update = will_isolate[bool_update_isol_time]
@@ -778,20 +775,32 @@ function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict,
     i_day = rand(1:7)
     sim["NTypes"] = Params["NContactTypes"]
     if any(TestParams["is_testing"])
+        #sort out groups who don't test first
+        sim["non_testers"] = zeros(Bool,sim["Ntot"])
+        for j in 1:sim["Njobs"]
+            if TestParams["is_testing"][j] == false
+                sim["non_testers"][sim["job_sorted_nodes"][j]] .= true
+            end
+        end
+        if haskey(sim, "start_day") #if there is a fixed shift pattern, testing is synced to this
+            start_days = sim["start_day"]
+        else
+            start_days = rand(1:7) * ones(Int,sim["Ntot"]) #otherwise we assume everyone tests on the same (random) days
+        end
+        
         if (TestParams["protocol"] == PCR_mass_protocol
          || TestParams["protocol"] == LFD_mass_protocol)
-             sim["test_days"], sim["test_day_counter"] =
-                     init_testing!(sim, TestParams, i_day, NDays; fill_pos_profiles=false)
-            sim["non_testers"] = zeros(Int,sim["Ntot"])
-            for j in 1:sim["Njobs"]
-                if TestParams["is_testing"][j] == false
-                    sim["non_testers"][sim["job_sorted_nodes"][j]] .= true
-                end
-            end
-        end  #add options for other protocols here
+            sim["test_days"], sim["test_day_counter"] =
+                    init_testing!(sim, TestParams, i_day, NDays, start_days; 
+                                  fill_pos_profiles=false)
+        elseif TestParams["protocol"] == LFD_pattern
+            sim["test_days"], sim["test_day_counter"] =
+                    init_testing!(sim, TestParams, i_day, NDays, start_days;
+                      fill_pos_profiles=false, pattern=TestParams["Pattern"])
+        end
     else
-        sim["test_day_counter"] = 1
-        sim["test_days"] = [0]
+        sim["test_day_counter"] = ones(Int,sim["Ntot"])
+        sim["test_days"] = zeros(Int,sim["Ntot"])
     end
     Anyinf = true
     if Params["SimType"] == Outbreak_sim
