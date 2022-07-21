@@ -37,30 +37,56 @@ const mask_factor_infector = 0.25
 const mask_factor_infectee = 0.5
 const distance_factor_per_m = 0.5
 
-# #P_inf = 1 - exp(-w(t,x)) -- this function returns w
-# function return_infection_weight(distance::Float64, duration::Float64,
-#                                  outdoor::Bool, talking_frac::Float64)
-#     w = infection_rate_F2F * duration * (distance_factor_per_m^(distance-1.0))
-#     if outdoor
-#         w = w * outside_factor
-#     end
-#     if talking == false
-#         w = (talking_frac + (1 - talking_frac) * no_talking_factor) * w
-#     end
-#
-#     return w
-# end
-
+#These overloaded functions all call this first function
+#In general each contact can be some combination of talking/non-talking and
+#outside/inside. In overloaded functions these are replaced by boolean options
+#which correspond 1.0 or 0.0 for those options
 #P_inf = 1 - exp(-w(t,x)) -- this function returns w
 function return_infection_weight(distance::Float64, duration::Float64,
+                                 outdoor_frac::Float64, talking_frac::Float64)
+    wbase = infection_rate_F2F * duration * (distance_factor_per_m^(distance-1.0))
+    ofac = outside_factor*outdoor_frac + (1-outdoor_frac)
+    tfac = no_talking_factor*(1-talking_frac) + talking_frac
+
+    return (wbase * ofac * tfac)
+end
+
+function return_infection_weight(distance::Float64, duration::Float64,
                                  outdoor::Bool, talking::Bool)
-    w = infection_rate_F2F * duration * (distance_factor_per_m^(distance-1.0))
+    ofrac = 0.0
     if outdoor
-        w = w * outside_factor
+        ofrac = 1.0
     end
-    if talking == false
-        w = no_talking_factor * w
+    tfrac = 0.0
+    if talking
+        tfrac = 1.0
     end
+
+    w = return_infection_weight(distance, duration, ofrac, tfrac)
+
+    return w
+end
+
+function return_infection_weight(distance::Float64, duration::Float64,
+                                 outdoor::Bool, talking_frac::Float64)
+    ofrac = 0.0
+    if outdoor
+        ofrac = 1.0
+    end
+
+    w = return_infection_weight(distance, duration, ofrac, talking_frac)
+
+    return w
+end
+
+function return_infection_weight(distance::Float64, duration::Float64,
+                                 outdoor_frac::Float64, talking::Bool)
+    tfrac = 0.0
+    if talking
+        tfrac = 1.0
+    end
+
+    w = return_infection_weight(distance, duration, outdoor_frac, tfrac)
 
     return w
 end
@@ -104,7 +130,7 @@ Initialises the transmission model.
 
 `sim::Dict()` = Framework for storing simulation data, to be passed to other functions
 """
-function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psusc::Float64, 
+function init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psusc::Float64,
         Inc::Array{Float64,1}, Prev::Array{Float64,1})
     Ntot = sum(N_per_role)
     Nj = length(N_per_role)
@@ -366,7 +392,7 @@ function get_network_infections(sim::Dict, i_day::Int)
         #get the edge weights (total transmission rate * contact time, can be multiple per edge)
         w = get_prop.(Ref(sim["contact_network"]),nin,nout,:weights)
         t = get_prop.(Ref(sim["contact_network"]),nin,nout,:types)
-        
+
         #fill and flatten all arrays so there is one entry for each entry
         nin_all = vcat(fill.(nin,length.(w))...)
         nout_all = vcat(fill.(nout,length.(w))...)
@@ -487,7 +513,7 @@ function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
             true_pos = should_test_positive[rand(LP) .< pos_probs_exposed]
             pos_tests[true_pos] .= true
         end
-        
+
         isolators = apply_positive_tests!(sim, nr[pos_tests], testing_params, i_day, isolation_network)
 
         sim["test_day_counter"][testers] .= sim["test_day_counter"][testers] .+ 1
@@ -787,11 +813,11 @@ function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict,
         else
             start_days = rand(1:7) * ones(Int,sim["Ntot"]) #otherwise we assume everyone tests on the same (random) days
         end
-        
+
         if (TestParams["protocol"] == PCR_mass_protocol
          || TestParams["protocol"] == LFD_mass_protocol)
             sim["test_days"], sim["test_day_counter"] =
-                    init_testing!(sim, TestParams, i_day, NDays, start_days; 
+                    init_testing!(sim, TestParams, i_day, NDays, start_days;
                                   fill_pos_profiles=false)
         elseif TestParams["protocol"] == LFD_pattern
             sim["test_days"], sim["test_day_counter"] =

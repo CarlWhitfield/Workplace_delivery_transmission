@@ -51,8 +51,25 @@ BasicPairParams = Dict("is_driver_pairs"=>true, "is_loader_pairs"=>true,
                   "is_window_open"=>false, "PairIsolation"=>true)
 
 
+##RNA viral load model
+VL_model = ke_model_no     #default option
+#VL_model = kissler_model_no
+#VL_model = HCS_model_no
 
-#Check this works
+##Infectiousness model
+Inf_model = ke_inf_model_no
+#Inf_model = flat_inf_model_no
+#Inf_model = linear_inf_model_no
+
+##LFD Test positivity model
+LFD_model = porton_down_p3b
+# LFD_model = porton_down
+# LFD_model = SC_data_2021
+# LFD_model = SC_data_Oct
+
+##Model parameters and extra options
+PCR_sens_max = 0.95            #maximum PCR sensitivity (0.95 - usually assumed, 0.83 - Ferretti et al 2021)
+
 function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
                 OccPerDay::Array{Float64,1};
                 PkgParams::Array{Dict{Any,Any},1} = fill(Dict(),length(ParamsVec)),
