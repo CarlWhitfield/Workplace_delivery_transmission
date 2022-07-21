@@ -1,3 +1,5 @@
+using Distributed
+
 include("dataframe_write.jl")
 
 NweeksDefault = 52
@@ -83,22 +85,30 @@ function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
      NParamSets = length(ParamsVec)
      Nrows = 4*NParamSets*Nrepeats
      TestParams = merge(ParamsVec[1],PkgParams[1],PairParams[1],TestingParams[1])
-     results = init_results_dataframe(Nrows, TestParams)
+     IntArray, FloatArray, IntColMap, FloatColMap =
+                                    init_results_dataframe(Nrows, TestParams)
 
      i_step = 4*Nrepeats
      for (i, Params) in enumerate(ParamsVec)
          i_ind_start = (i-1)*i_step + 1
-         print(i,'\n')
-         @threads for n in 1:Nrepeats
+         print(i,'/',length(ParamsVec),'\n')
+         @distributed for n in 1:Nrepeats
             index_start = i_ind_start + (n-1)*4
-            out = run_sim_delivery_wp(Params, OccPerDay, NPPerDay;
-                PkgParams=PkgParams[i], PairParams=PairParams[i],
-                TestParams=TestingParams[i], Incidence=Incidence,
-                Prevalence=Prevalence)
-            AllParams = merge(ParamsVec[i],PkgParams[i],PairParams[i],TestingParams[i])
-            add_to_results_dataframe!(results, AllParams, out, index_start, n)
+            Ph = deepcopy(Params)
+            PkgPh = deepcopy(PkgParams[i])
+            PairPh = deepcopy(PairParams[i])
+            TPh = deepcopy(TestingParams[i])
+            out = run_sim_delivery_wp(Ph, deepcopy(OccPerDay), deepcopy(NPPerDay);
+                PkgParams=PkgPh, PairParams=PairPh, TestParams=TPh,
+                Incidence=deepcopy(Incidence), Prevalence=deepcopy(Prevalence))
+            AllParams = merge(Ph,PkgPh,PairPh,TPh)
+            add_to_results_dataframe!(IntArray, FloatArray, IntColMap,
+                                      FloatColMap, AllParams, out, index_start, n)
          end
      end
+
+     results = create_dataframe_from_arrays(IntArray, FloatArray, IntColMap,
+                                            FloatColMap)
 
      CSV.write(filename, results)
      return results
