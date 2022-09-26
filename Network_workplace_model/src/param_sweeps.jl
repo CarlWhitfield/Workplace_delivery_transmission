@@ -87,7 +87,6 @@ function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
      TestParams = merge(ParamsVec[1],PkgParams[1],PairParams[1],TestingParams[1])
      IntArray, FloatArray, IntColMap, FloatColMap =
                                     init_results_dataframe(Nrows, TestParams)
-     print(Nrows,'\n')
      i_step = 4*Nrepeats
      for (i, Params) in enumerate(ParamsVec)
          i_ind_start = (i-1)*i_step + 1
@@ -104,8 +103,7 @@ function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
             AllParams = merge(Ph,PkgPh,PairPh,TPh)
             add_to_results_dataframe!(IntArray, FloatArray, IntColMap,
                                       FloatColMap, AllParams, out, index_start, n)
-         end
-         print(i_ind_start,'\n')
+        end
      end
 
      results = create_dataframe_from_arrays(IntArray, FloatArray, IntColMap,

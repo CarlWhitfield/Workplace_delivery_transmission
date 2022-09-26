@@ -68,6 +68,7 @@ function add_to_results_dataframe!(IntArray::SharedArray{Int64,2},
             add_to_shared_array!(FloatArray,Params[p],FloatColMap[colname],irow_start)
         elseif colname in keys(IntColMap)
             add_to_shared_array!(IntArray,Params[p],IntColMap[colname],irow_start)
+        end
     end
 
     if Params["SimType"] == Outbreak_sim
