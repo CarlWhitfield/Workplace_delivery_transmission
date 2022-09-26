@@ -11,6 +11,7 @@ function init_results_dataframe(Nrows::Int, AllParams::Dict)
     :ExtIntroFrac, :CustIntroFrac, :CarShareInfFrac, :HouseShareInfFrac,
     :IsolatorsFrac, :SympIsolatorsFrac, :FPIsolatorsFrac, :TPSympIsolatorsFrac,
     :TPAsympIsolatorsFrac]
+    BoolColNames = []
 
     if AllParams["SimType"] == Outbreak_sim
         push!(IntColNames,:IndexCaseInfections,:OverallOutbreakLength)
@@ -30,12 +31,15 @@ function init_results_dataframe(Nrows::Int, AllParams::Dict)
                 push!(IntColNames,Symbol(p))
             elseif typeof(p0) <: AbstractFloat
                 push!(FloatColNames,Symbol(p))
+            elseif typeof(p0) <: Bool
+                push!(BoolColNames,Symbol(p))
             end
         end
     end
     IntArray = SharedArray{Int64}(Nrows,length(IntColNames))
     FloatArray = SharedArray{Float64}(Nrows,length(FloatColNames))
-
+    BoolArray = SharedArray{Bool}(Nrows,length(BoolColNames))
+    
     IntColMap = Dict{Symbol,Int}()
     for (i,col) in enumerate(IntColNames)
         IntColMap[col] = i
@@ -44,8 +48,12 @@ function init_results_dataframe(Nrows::Int, AllParams::Dict)
     for (i,col) in enumerate(FloatColNames)
         FloatColMap[col] = i
     end
+    BoolColMap
+    for (i,col) in enumerate(BoolColNames)
+        BoolColMap[col] = i
+    end
 
-    return IntArray, FloatArray, IntColMap, FloatColMap
+    return IntArray, FloatArray, BoolArray, IntColMap, FloatColMap, BoolColMap
 end
 
 function add_to_shared_array!(ResultsArray::SharedArray, Value, icol::Int,
@@ -59,7 +67,8 @@ function add_to_shared_array!(ResultsArray::SharedArray, Value, icol::Int,
 end
 
 function add_to_results_dataframe!(IntArray::SharedArray{Int64,2},
-    FloatArray::SharedArray{Float64,2}, IntColMap::Dict, FloatColMap::Dict,
+    FloatArray::SharedArray{Float64,2}, BoolArray::SharedArray{Bool,2}, 
+    IntColMap::Dict, FloatColMap::Dict, BoolColMap::Dict,
     Params::Dict, SimOutput::Dict, irow_start::Int, Niteration::Int)
 
     for p in keys(Params)
@@ -68,6 +77,8 @@ function add_to_results_dataframe!(IntArray::SharedArray{Int64,2},
             add_to_shared_array!(FloatArray,Params[p],FloatColMap[colname],irow_start)
         elseif colname in keys(IntColMap)
             add_to_shared_array!(IntArray,Params[p],IntColMap[colname],irow_start)
+        elseif colname in keys(BoolColMap)
+            add_to_shared_array!(BoolArray,Params[p],BoolColMap[colname],irow_start)
         end
     end
 
@@ -160,8 +171,9 @@ function add_to_results_dataframe!(IntArray::SharedArray{Int64,2},
 end
 
 function create_dataframe_from_arrays(IntArray::SharedArray{Int64,2},
-    FloatArray::SharedArray{Float64,2}, IntColMap::Dict{Symbol,Int},
-    FloatColMap::Dict{Symbol,Int})
+    FloatArray::SharedArray{Float64,2}, BoolArray::SharedArray{Bool,2}, 
+    IntColMap::Dict{Symbol,Int}, FloatColMap::Dict{Symbol,Int},  
+    BoolColMap::Dict{Symbol,Bool})
 
     df = DataFrame()
     for colname in keys(FloatColMap)
@@ -169,6 +181,9 @@ function create_dataframe_from_arrays(IntArray::SharedArray{Int64,2},
     end
     for colname in keys(IntColMap)
         df[!,colname] = IntArray[:,IntColMap[colname]]
+    end
+    for colname in keys(BoolColMap)
+        df[!,colname] = BoolArray[:,BoolColMap[colname]]
     end
     #fill in group numbers
     Names = ["Drivers","Pickers","Office","All"]

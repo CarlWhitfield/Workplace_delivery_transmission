@@ -85,9 +85,9 @@ function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
      NParamSets = length(ParamsVec)
      Nrows = 4*NParamSets*Nrepeats
      TestParams = merge(ParamsVec[1],PkgParams[1],PairParams[1],TestingParams[1])
-     IntArray, FloatArray, IntColMap, FloatColMap =
+     IntArray, FloatArray, BoolArray, IntColMap, FloatColMap, BoolColMap =
                                     init_results_dataframe(Nrows, TestParams)
-
+     print(Nrows,'\n')
      i_step = 4*Nrepeats
      for (i, Params) in enumerate(ParamsVec)
          i_ind_start = (i-1)*i_step + 1
@@ -102,13 +102,14 @@ function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
                 PkgParams=PkgPh, PairParams=PairPh, TestParams=TPh,
                 Incidence=deepcopy(Incidence), Prevalence=deepcopy(Prevalence))
             AllParams = merge(Ph,PkgPh,PairPh,TPh)
-            add_to_results_dataframe!(IntArray, FloatArray, IntColMap,
-                                      FloatColMap, AllParams, out, index_start, n)
+            add_to_results_dataframe!(IntArray, FloatArray, BoolArray, IntColMap,
+                                      FloatColMap, BoolColMap, AllParams, out, index_start, n)
          end
+         print(i_ind_start,'\n')
      end
-
-     results = create_dataframe_from_arrays(IntArray, FloatArray, IntColMap,
-                                            FloatColMap)
+    
+     results = create_dataframe_from_arrays(IntArray, FloatArray, BoolArray, IntColMap,
+                                            FloatColMap, BoolColMap)
 
      CSV.write(filename, results)
      return results
