@@ -45,7 +45,7 @@ function init_results_dataframe(Nrows::Int, AllParams::Dict)
         FloatColMap[col] = i
     end
 
-    return IntArray, FloatArray IntColMap, FloatColMap
+    return IntArray, FloatArray, IntColMap, FloatColMap
 end
 
 function add_to_shared_array!(ResultsArray::SharedArray, Value, icol::Int,
