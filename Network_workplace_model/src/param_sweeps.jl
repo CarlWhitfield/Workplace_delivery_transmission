@@ -24,7 +24,7 @@ BasicParcelParams = Dict("ND"=>NDparcel_def, "NL"=>NLparcel_def, "NO"=>NOparcel_
          "CustomerOutdoorFrac"=>1.0)
 
 SpecDefault = 0.999 #Specificity
-BasicTestingParams = Dict("is_testing"=>true, "test_miss_prob"=>0.4,
+BasicTestingParams = Dict("is_testing"=>[true,true,true], "test_miss_prob"=>0.4,
              "testing_enforced"=>false, "tperiod"=>3, "protocol"=>LFD_mass_protocol,
              "specificity"=>SpecDefault, "delay"=>0.0,
              "test_pause"=>21.0)
@@ -85,14 +85,14 @@ function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
      NParamSets = length(ParamsVec)
      Nrows = 4*NParamSets*Nrepeats
      TestParams = merge(ParamsVec[1],PkgParams[1],PairParams[1],TestingParams[1])
-     IntArray, FloatArray, BoolArray, IntColMap, FloatColMap, BoolColMap =
+     IntArray, FloatArray, IntColMap, FloatColMap =
                                     init_results_dataframe(Nrows, TestParams)
      print(Nrows,'\n')
      i_step = 4*Nrepeats
      for (i, Params) in enumerate(ParamsVec)
          i_ind_start = (i-1)*i_step + 1
          print(i,'/',length(ParamsVec),'\n')
-         @distributed for n in 1:Nrepeats
+         @threads for n in 1:Nrepeats
             index_start = i_ind_start + (n-1)*4
             Ph = deepcopy(Params)
             PkgPh = deepcopy(PkgParams[i])
@@ -102,14 +102,14 @@ function run_many_sims(ParamsVec::Array{Dict{Any,Any},1}, Nrepeats::Int,
                 PkgParams=PkgPh, PairParams=PairPh, TestParams=TPh,
                 Incidence=deepcopy(Incidence), Prevalence=deepcopy(Prevalence))
             AllParams = merge(Ph,PkgPh,PairPh,TPh)
-            add_to_results_dataframe!(IntArray, FloatArray, BoolArray, IntColMap,
-                                      FloatColMap, BoolColMap, AllParams, out, index_start, n)
+            add_to_results_dataframe!(IntArray, FloatArray, IntColMap,
+                                      FloatColMap, AllParams, out, index_start, n)
          end
          print(i_ind_start,'\n')
      end
-    
-     results = create_dataframe_from_arrays(IntArray, FloatArray, BoolArray, IntColMap,
-                                            FloatColMap, BoolColMap)
+
+     results = create_dataframe_from_arrays(IntArray, FloatArray, IntColMap,
+                                            FloatColMap)
 
      CSV.write(filename, results)
      return results
@@ -743,7 +743,7 @@ function run_all_interventions_separately_scenario_parcel(Prev::Array{Float64,1}
             PP["CarShareIsolation"] = CarShareIsolation[i]
             PP["CohortIsolation"] = CohortIsolation[i]
             PP["SimType"] = Scenario_sim
-            TP["is_testing"] = Testing[i]
+            TP["is_testing"] = [Testing[i],Testing[i],Testing[i]]
             TP["testing_enforced"] = EnforcedTesting[i]
             push!(ParamVec, PP)
             push!(TestParamVec, TP)
@@ -799,7 +799,7 @@ function run_all_interventions_separately_scenario_pairs(Prev::Array{Float64,1},
             PP["CarShareIsolation"] = CarShareIsolation[i]
             PP["CohortIsolation"] = CohortIsolation[i]
             PP["SimType"] = Scenario_sim
-            TP["is_testing"] = Testing[i]
+            TP["is_testing"] = [Testing[i],Testing[i],Testing[i]]
             TP["testing_enforced"] = EnforcedTesting[i]
             PairPs["fixed_driver_pairs"] = FixedPairs[i]
             PairPs["fixed_loader_pairs"] = FixedPairs[i]
@@ -856,7 +856,7 @@ function run_all_interventions_variableprev_scenario_parcel(Prev::Array{Float64,
         PP["CarShareIsolation"] = CarShareIsolation[i]
         PP["CohortIsolation"] = CohortIsolation[i]
         PP["SimType"] = Scenario_sim
-        TP["is_testing"] = Testing[i]
+        TP["is_testing"] = [Testing[i],Testing[i],Testing[i]]
         TP["testing_enforced"] = EnforcedTesting[i]
         PP["NDteams"] = NDteams[i]
         PP["NLteams"] = NLteams[i]
@@ -911,7 +911,7 @@ function run_all_interventions_variableprev_scenario_parcel_isolfirst(Prev::Arra
         PP["CarShareIsolation"] = CarShareIsolation[i]
         PP["CohortIsolation"] = CohortIsolation[i]
         PP["SimType"] = Scenario_sim
-        TP["is_testing"] = Testing[i]
+        TP["is_testing"] = [Testing[i],Testing[i],Testing[i]]
         TP["testing_enforced"] = EnforcedTesting[i]
         PP["NDteams"] = NDteams[i]
         PP["NLteams"] = NLteams[i]
@@ -965,7 +965,7 @@ function run_all_interventions_variableprev_scenario_pairs(Prev::Array{Float64,1
         PP["CarShareIsolation"] = CarShareIsolation[i]
         PP["CohortIsolation"] = CohortIsolation[i]
         PP["SimType"] = Scenario_sim
-        TP["is_testing"] = Testing[i]
+        TP["is_testing"] = [Testing[i],Testing[i],Testing[i]]
         TP["testing_enforced"] = EnforcedTesting[i]
         PairPs["fixed_driver_pairs"] = FixedPairs[i]
         PairPs["fixed_loader_pairs"] = FixedPairs[i]
@@ -1020,7 +1020,7 @@ function run_all_interventions_variableprev_scenario_pairs_isolfirst(Prev::Array
         PP["CarShareIsolation"] = CarShareIsolation[i]
         PP["CohortIsolation"] = CohortIsolation[i]
         PP["SimType"] = Scenario_sim
-        TP["is_testing"] = Testing[i]
+        TP["is_testing"] = [Testing[i],Testing[i],Testing[i]]
         TP["testing_enforced"] = EnforcedTesting[i]
         PairPs["fixed_driver_pairs"] = FixedPairs[i]
         PairPs["fixed_loader_pairs"] = FixedPairs[i]

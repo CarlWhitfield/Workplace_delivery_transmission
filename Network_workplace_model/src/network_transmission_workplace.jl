@@ -1075,7 +1075,7 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
                                F2F_mod=TransModifiers["F2F_mod"], SS_mod=TransModifiers["Aerosol_mod"])
 
     #do_testing
-    if TestParams["is_testing"]
+    if any(TestParams["is_testing"])
         new_isolators = do_testing!(sim, TestParams, i_day, sim["isolation_network"])
     end
 

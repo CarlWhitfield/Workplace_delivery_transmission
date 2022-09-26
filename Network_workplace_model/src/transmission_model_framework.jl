@@ -488,7 +488,8 @@ function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
     all_testers = nr[bool_will_do_test]
     bool_will_test_today = zeros(Bool,sim["Ntot"])
     for i in all_testers
-        if i_day == sim["test_days"][i][sim["test_day_counter"][i]]
+        if (sim["test_day_counter"][i] <= length(sim["test_days"][i])) &&
+           (i_day == sim["test_days"][i][sim["test_day_counter"][i]])
             bool_will_test_today[i] = true
         end
     end
@@ -810,6 +811,12 @@ function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict,
         end
         if haskey(sim, "start_day") #if there is a fixed shift pattern, testing is synced to this
             start_days = sim["start_day"]
+        elseif haskey(TestParams,"tperiod")
+            if TestParams["tperiod"] > 1
+                start_days = rand(1:TestParams["tperiod"])*ones(Int,sim["Ntot"])
+            else
+                start_days = ones(Int,sim["Ntot"])
+            end
         else
             start_days = rand(1:7) * ones(Int,sim["Ntot"]) #otherwise we assume everyone tests on the same (random) days
         end
