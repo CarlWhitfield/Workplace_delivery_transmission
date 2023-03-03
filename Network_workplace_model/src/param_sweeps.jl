@@ -315,73 +315,76 @@ function run_presenteeism_param_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     return df
 end
 
-function run_car_house_share_sweep_parcel(Nrepeats::Int = 10000)
+function run_house_share_sweep_parcel(Nrepeats::Int = 10000)
     OccPattern = repeat(ParcelOccPattern,NweeksDefault)
     PkgPattern = repeat(ParcelPkgPattern,NweeksDefault)
     NPvec = Int64.(round.(NPparcel*PkgPattern))
     #other params
-    CarShareF = 0.0:0.2:1.0
-    HouseShareF = 0.0:0.2:1.0
-    CarShareIsol = [true, false]
+    HouseShareF = 0.0:0.2:2.0
     HouseShareIsol = [true, false]
+    IsTesting = [true, false]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    TestVec = Array{Dict{Any,Any},1}(undef,0)
     PkgP = copy(BasicPkgParams)
-    for csf in CarShareF
-        for hsf in HouseShareF
-            for csisol in CarShareIsol
-                for hsisol in HouseShareIsol
-                    PP = copy(BasicParcelParams)
-                    PP["CarShareFactor"] = csf
-                    PP["HouseShareFactor"] = hsf
-                    PP["CarShareIsolation"] = csisol
-                    PP["HouseShareIsolation"] = hsisol
-                    push!(ParamVec,PP)
-                    push!(PkgVec, PkgP)
+    for hsf in HouseShareF
+        for hsisol in HouseShareIsol
+            PP = copy(BasicParcelParams)
+            PP["HouseShareFactor"] = hsf
+            PP["HouseShareIsolation"] = hsisol
+            for th in IsTesting
+                TP = copy(BasicTestingParams)
+                if th == false
+                    TP["is_testing"] = [false, false, false]
                 end
+                push!(ParamVec,PP)
+                push!(PkgVec, PkgP)
+                push!(TestVec, TP)
             end
         end
     end
     df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec,
-               PkgParams = PkgVec, filename="car_house_share_param_sweep_parcel.csv")
+               PkgParams = PkgVec, TestingParams = TestVec,
+               filename="house_share_param_sweep_parcel.csv")
     return df
-
 end
 
-function run_car_house_share_sweep_pairs(Nrepeats::Int = 10000)
+function run_house_share_sweep_pairs(Nrepeats::Int = 10000)
     OccPattern = repeat(BulkOccPattern,NweeksDefault)
     PkgPattern = repeat(BulkPkgPattern,NweeksDefault)
     NPvec = Int64.(round.(NPbulk*PkgPattern))
     #other params
-    CarShareF = 0.0:0.2:1.0
-    HouseShareF = 0.0:0.2:1.0
-    CarShareIsol = [true, false]
+    HouseShareF = 0.0:0.2:2.0
     HouseShareIsol = [true, false]
+    IsTesting = [true, false]
 
     ParamVec = Array{Dict{Any,Any},1}(undef,0)
     PairParams = Array{Dict{Any,Any},1}(undef,0)
     PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    TestVec = Array{Dict{Any,Any},1}(undef,0)
     PairPs = copy(BasicPairParams)
     PkgP = copy(BasicPkgParams)
-    for csf in CarShareF
-        for hsf in HouseShareF
-            for csisol in CarShareIsol
-                for hsisol in HouseShareIsol
-                    PP = copy(BasicBulkParams)
-                    PP["CarShareFactor"] = csf
-                    PP["HouseShareFactor"] = hsf
-                    PP["CarShareIsolation"] = csisol
-                    PP["HouseShareIsolation"] = hsisol
-                    push!(ParamVec,PP)
-                    push!(PairParams,PairPs)
-                    push!(PkgVec,PkgP)
+    for hsf in HouseShareF
+        for hsisol in HouseShareIsol
+            PP = copy(BasicBulkParams)
+            PP["HouseShareFactor"] = hsf
+            PP["HouseShareIsolation"] = hsisol
+            for th in IsTesting
+                TP = copy(BasicTestingParams)
+                if th == false
+                    TP["is_testing"] = [false, false, false]
                 end
+                push!(ParamVec,PP)
+                push!(PairParams,PairPs)
+                push!(PkgVec,PkgP)
+                push!(TestVec, TP)
             end
         end
     end
     df = run_many_sims(ParamVec, Nrepeats, OccPattern; NPPerDay = NPvec, PkgParams = PkgVec,
-                  PairParams = PairParams, filename="car_house_share_param_sweep_pairs.csv")
+                  PairParams = PairParams, TestingParams = TestVec,
+                  filename="house_share_param_sweep_pairs.csv")
     return df
 
 end
@@ -491,19 +494,85 @@ function run_testing_sweep_outbreak_pairs(Nrepeats::Int = 10000)
     push!(PairParams, PairPs)
     df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern;  NPPerDay = NPvec,
                         PkgParams = PkgVec, PairParams = PairParams, output = false)
-    df2["is_testing"] = zeros(Bool,nrow(df2))
-    df2["testing_enforced"] = zeros(Bool,nrow(df2))
-    df2["test_miss_prob"] = zeros(nrow(df2))
-    df2["tperiod"] = zeros(nrow(df2))
-    df2["protocol"] = fill(0, nrow(df2))
-    df2["specificity"] = 0.999 * ones(nrow(df2))
-    df2["delay"] = zeros(nrow(df2))
-    df2["test_pause"] = zeros(nrow(df2))
+    df2[!,"is_testing"] = zeros(Bool,nrow(df2))
+    df2[!,"testing_enforced"] = zeros(Bool,nrow(df2))
+    df2[!,"test_miss_prob"] = zeros(nrow(df2))
+    df2[!,"tperiod"] = zeros(nrow(df2))
+    df2[!,"protocol"] = fill(0, nrow(df2))
+    df2[!,"specificity"] = 0.999 * ones(nrow(df2))
+    df2[!,"delay"] = zeros(nrow(df2))
+    df2[!,"test_pause"] = zeros(nrow(df2))
     df = vcat(df,df2)
 
     CSV.write("testing_sweep_pairs.csv", df)
     return df
 end
+
+function run_testing_sweep_outbreak_pairs_alt(Nrepeats::Int = 10000)
+    OccPattern = repeat(BulkOccPattern,NweeksDefault)
+    PkgPattern = repeat(BulkPkgPattern,NweeksDefault)
+    NPvec = Int64.(round.(NPbulk*PkgPattern))
+
+    Enforced = [false,true]
+    Tperiod = 2:2:14
+    Delay = [0,0,1,2]
+    TestType = [LFD_mass_protocol,PCR_mass_protocol,PCR_mass_protocol,PCR_mass_protocol]
+    Test_pause = [21,90,90,90]
+
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    TestParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PairParams = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    PP = copy(BasicBulkParams)
+    PairPs = copy(BasicPairParams)
+    PairPs["fixed_driver_pairs"] = false
+    PairPs["fixed_loader_pairs"] = false
+    PairPs["PairIsolation"] = false
+    PkgP = copy(BasicPkgParams)
+    for j in 1:2
+        for tp in Tperiod
+            for i in 1:length(TestType)
+                TPh = copy(BasicTestingParams)
+                push!(ParamVec, PP)
+                push!(PkgVec, PkgP)
+                TPh["testing_enforced"] = Enforced[j]
+                TPh["tperiod"] = tp
+                TPh["protocol"] = TestType[i]
+                TPh["delay"] = Delay[i]
+                TPh["test_pause"] = Test_pause[i]
+                push!(TestParamVec, TPh)
+                push!(PairParams, PairPs)
+            end
+        end
+    end
+
+    df = run_many_sims(ParamVec, Nrepeats, OccPattern;  NPPerDay = NPvec, PkgParams = PkgVec,
+             TestingParams=TestParamVec,  PairParams = PairParams, output = false)
+
+    #run baseline case
+    ParamVec = Array{Dict{Any,Any},1}(undef,0)
+    PairParams = Array{Dict{Any,Any},1}(undef,0)
+    PkgVec = Array{Dict{Any,Any},1}(undef,0)
+    push!(PkgVec, PkgP)
+    push!(ParamVec, PP)
+    push!(PairParams, PairPs)
+    df2 = run_many_sims(ParamVec, Nrepeats*length(Tperiod), OccPattern;  NPPerDay = NPvec,
+                        PkgParams = PkgVec, PairParams = PairParams, output = false)
+    df2[!,"is_testing"] = zeros(Bool,nrow(df2))
+    df2[!,"testing_enforced"] = zeros(Bool,nrow(df2))
+    df2[!,"test_miss_prob"] = zeros(nrow(df2))
+    df2[!,"tperiod"] = zeros(nrow(df2))
+    df2[!,"protocol"] = fill(0, nrow(df2))
+    df2[!,"specificity"] = 0.999 * ones(nrow(df2))
+    df2[!,"delay"] = zeros(nrow(df2))
+    df2[!,"test_pause"] = zeros(nrow(df2))
+    df = vcat(df,df2)
+
+    CSV.write("testing_sweep_random_pairs.csv", df)
+    return df
+end
+
+
 
 # function run_testing_sweep_fixedprev_scenario_parcel(Prev_val::Float64, Nrepeats::Int = 10000)
 #     NWeeks= 26

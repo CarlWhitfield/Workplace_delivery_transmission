@@ -475,49 +475,54 @@ function select_pairs!(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64,
 
         #number of pairs to be formed
         NP = min(Npairs_needed, Npairs_available)
-
         pairs = zeros(Int64,(2,NP))
-        if fixed_pairs
-            #total number of fixed pairs
-            fp_bool = (sim["fixed_job_pair_labels"] .== job)
-            pair_nos = collect(1:length(sim["fixed_job_pair_labels"]))[fp_bool]
-            p1 = sim["fixed_job_pairings"][1,pair_nos]
-            p2 = sim["fixed_job_pairings"][2,pair_nos]
-            is_pair_available = ((in(available).(p1)) .* (in(available).(p2)))
-            available_pairs = pair_nos[is_pair_available]
+        if NP > 0
+            if fixed_pairs
+                #total number of fixed pairs
+                fp_bool = (sim["fixed_job_pair_labels"] .== job)
+                pair_nos = collect(1:length(sim["fixed_job_pair_labels"]))[fp_bool]
+                p1 = sim["fixed_job_pairings"][1,pair_nos]
+                p2 = sim["fixed_job_pairings"][2,pair_nos]
+                is_pair_available = ((in(available).(p1)) .* (in(available).(p2)))
+                available_pairs = pair_nos[is_pair_available]
 
-            #who is available unpaired
-            available_unpaired = vcat(p1[(in(available).(p1))  .* .!(in(available).(p2))],
-                                      p2[(in(available).(p2))  .* .!(in(available).(p1))])
+                #who is available unpaired
+                available_unpaired = vcat(p1[(in(available).(p1))  .* .!(in(available).(p2))],
+                                        p2[(in(available).(p2))  .* .!(in(available).(p1))])
 
-            #fill available fixed pairs first
-            apl = length(available_pairs)
-            if apl <= NP
-                pairs[:,1:length(available_pairs)] =
-                                 sim["fixed_job_pairings"][:,available_pairs]
-                if apl < NP  #need to fill with unpaired people
-                    #randomly allocate unpaired people
-                    aups = length(available_unpaired)
-                    NPUs = Int64(floor(aups/2))
-                    if NPUs > 0
-                        Npsample = min(NPUs, (NP-apl))
-                        nos = sample(available_unpaired, 2*Npsample, replace = false)
-                        pairs[1,(apl+1):(apl+Npsample)] = nos[1:Npsample]
-                        pairs[2,(apl+1):(apl+Npsample)] = nos[(Npsample+1):(2*Npsample)]
+                #fill available fixed pairs first
+                apl = length(available_pairs)
+                if apl <= NP
+                    pairs[:,1:length(available_pairs)] =
+                                    sim["fixed_job_pairings"][:,available_pairs]
+                    if apl < NP  #need to fill with unpaired people
+                        #randomly allocate unpaired people
+                        aups = length(available_unpaired)
+                        NPUs = Int64(floor(aups/2))
+                        if NPUs > 0
+                            Npsample = min(NPUs, (NP-apl))
+                            nos = sample(available_unpaired, 2*Npsample, replace = false)
+                            pairs[1,(apl+1):(apl+Npsample)] = nos[1:Npsample]
+                            pairs[2,(apl+1):(apl+Npsample)] = nos[(Npsample+1):(2*Npsample)]
+                        end
                     end
+                else
+                    #randomly select fixed pairs
+                    sampled_pair_nos = sample(available_pairs, NP, replace = false)
+                    pairs = sim["fixed_job_pairings"][:,sampled_pair_nos]
                 end
             else
-                #randomly select fixed pairs
-                sampled_pair_nos = sample(available_pairs, NP, replace = false)
-                pairs = sim["fixed_job_pairings"][:,sampled_pair_nos]
+                #randomly allocate all pairs
+                nos = sample(available, 2*NP, replace=false)
+                pairs[1,:] = nos[1:NP]
+                pairs[2,:] = nos[(NP+1):2*NP]
             end
+            pair_cons = rand(Multinomial(Ncons,size(pairs,2)))
         else
-            #randomly allocate all pairs
-            nos = sample(available, 2*NP, replace=false)
-            pairs[1,:] = nos[1:NP]
-            pairs[2,:] = nos[(NP+1):2*NP]
+            #nobody in work
+            pairs = Array{Int64,2}(undef,0,0)
+            pair_cons = Array{Int64,1}(undef,0)
         end
-        pair_cons = rand(Multinomial(Ncons,size(pairs,2)))
     else
         #nobody in work
         pairs = Array{Int64,2}(undef,0)
@@ -767,7 +772,7 @@ function generate_infected_packages_and_customers!(sim::Dict, NP::Int64,
         in_weight = F2F_mod*return_infection_weight(modifiers["distance"],
                     sim["contact_times"]["t_doorstep"],false, TypicalContactTalkingFrac)
         doorstep_weight = modifiers["outdoor_contact_frac"] * out_weight
-         + (1-modifiers["outdoor_contact_frac"]) * in_weight
+                        + (1-modifiers["outdoor_contact_frac"]) * in_weight
 
         for i in 1:length(InfDrivers)       #loop over all drivers to find infectees
             iDpkgs = NADrivers[InfDriverPos[i]]     #number of packages handled by driver
