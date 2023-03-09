@@ -8,16 +8,21 @@
 *.pdf
 *.svg
 *.pptx
-*.ipynb
 Company Data Analysis/*
 .ipynb_checkpoints/*
 Network_workplace_model/.ipynb_checkpoints/*
 Network_workplace_model/*/.ipynb_checkpoints/*
 Testing models/.ipynb_checkpoints/*
 Network_workplace_model/Testing_params/*
-Network_workplace_model/Latest_results/*
 Network_workplace_model/src/alt_parameters/*
 Testing models/*
 Network_workplace_model/Notebooks/*
 Python_model_original/*
 test_net.jl
+Network_workplace_model/Latest_results*
+Network_workplace_model/Old_results*
+Network_workplace_model/Simple_workplace_model/
+Network_workplace_model/src/test.ipynb
+Network_workplace_model/src/Untitled.ipynb
+prev_inc.ipynb
+prevalence.ipynb

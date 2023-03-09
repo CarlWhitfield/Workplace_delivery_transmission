@@ -127,13 +127,6 @@ function update_cohort_edge_weight!(G::MetaGraphs.MetaGraph, team::Array{Int64,1
     end
 end
 
-#split drivers into teams who all have pre-shift meeting with one office person? Or one warehouse person?
-#If pairs delivery, pairs are assigned within teams.
-#Could do same with warehouse people and office people.
-#NPteams, NOteams
-#Regular network is just team interactions
-#Random interactions are just that, but with t_d and phi factors
-#Could reassign daily by regenerating this graph, or keep fixed
 """
     generate_cohort_graph!(sim::Dict, Nteams::Array{Int64,1}, TeamF2FTime::Array{Float64,1},
                                outside::Array{Bool,1}, distance::Array{Float64})
@@ -268,10 +261,6 @@ function shuffle_cohorts!(sim::Dict, p_s::Float64, Nteams::Array{Int64,1}, TeamF
     end
 end
 
-
-"""
-
-"""
 function generate_car_share_and_house_share_graphs!(sim::Dict, HomeParams::Dict; F2F_mod::Float64=1.0)
     sim["car_share_network"] = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))
     sim["house_share_network"] = MetaGraphs.MetaGraph(SimpleGraph(sim["Ntot"]))
@@ -343,12 +332,6 @@ function generate_car_share_and_house_share_graphs!(sim::Dict, HomeParams::Dict;
     return hhs, cars
 end
 
-
-"""
-    apply_contact_mixing_params!(sim::Dict, Params::Dict)
-
-
-"""
 function apply_contact_mixing_params!(sim::Dict, Params::Dict)
     for i = 1:3, j=1:3
         if i == 1 || j == 1
@@ -365,9 +348,6 @@ function apply_contact_mixing_params!(sim::Dict, Params::Dict)
     #sim["contact_prob_mat"] .*= coeff
 end
 
-"""
-
-"""
 function init(Params::Dict, Inc::Array{Float64,1},
         Prev::Array{Float64,1}; F2F_mod::Float64=1.0)
     sim = init_transmission_model([Params["ND"],Params["NL"],Params["NO"]],
@@ -411,9 +391,6 @@ function init_pairs!(sim::Dict, PairParams::Dict)
     end
 end
 
-"""
-
-"""
 function initialise(Params::Dict, PairParams::Dict, Incidence::Array{Float64,1},
                     Prevalence::Array{Float64,1}, TransModifiers::Dict)
     sim = init(Params, Incidence, Prevalence; F2F_mod=TransModifiers["F2F_mod"])
@@ -434,9 +411,6 @@ function initialise(Params::Dict, PairParams::Dict, Incidence::Array{Float64,1},
     return sim
 end
 
-"""
-
-"""
 function generate_random_absences(available::Array{Int64,1}, AbsRate::Float64)
     #random absences
     away = randsubseq(available, AbsRate)
@@ -444,9 +418,6 @@ function generate_random_absences(available::Array{Int64,1}, AbsRate::Float64)
     return available[.!in.(available,Ref(away))]
 end
 
-"""
-
-"""
 function select_pairs!(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64,
                        Ncons::Int64, AbsRate::Float64)
     jobgroup = sim["job_sorted_nodes"][job]
@@ -544,9 +515,6 @@ function select_pairs!(sim::Dict, occ::Float64, fixed_pairs::Bool, job::Int64,
     return pairs_out, pair_cons
 end
 
-"""
-
-"""
 function get_individual_assignments!(sim::Dict, occ::Float64, Ncons::Int64,
                                      job::Int, AbsRate::Float64)
     #without pairs
@@ -569,10 +537,6 @@ function get_individual_assignments!(sim::Dict, occ::Float64, Ncons::Int64,
     return w, NAs
 end
 
-"""
-
-
-"""
 function get_pair_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dict,
                                job::Int, AbsRate::Float64; F2F_mod::Float64 = 1.0)
     pairs = Array{Int64,2}(undef,2,0)
@@ -606,9 +570,6 @@ function get_pair_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams
             transpose(NPassignments)))
 end
 
-"""
-
-"""
 function get_assignments!(sim::Dict, occ::Float64, Ncons::Int64, PairParams::Dict;
                           office_wfh::Bool = false, F2F_mod::Float64 = 1.0, AbsRate::Float64 = 0)
 
@@ -1076,8 +1037,8 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
 
     Nteams = [Params["NDteams"],Params["NLteams"],Params["NOteams"]]
     shuffle_cohorts!(sim, Params["CohortChangeRate"], Nteams, Params["TeamTimes"],
-                               Params["TeamsOutside"], Params["TeamDistances"];
-                               F2F_mod=TransModifiers["F2F_mod"], SS_mod=TransModifiers["Aerosol_mod"])
+                          Params["TeamsOutside"], Params["TeamDistances"];
+                          F2F_mod=TransModifiers["F2F_mod"], SS_mod=TransModifiers["Aerosol_mod"])
 
     #do_testing
     if any(TestParams["is_testing"])
@@ -1131,7 +1092,80 @@ function sim_loop_delivery_wp!(sim::Dict, sim_summary::Dict, i_day::Int, Occ::Fl
     return infpairs_final
 end
 
-#run a either single outbreak with 1 initial case, or a sim with no cases but introductions
+"""
+### Description
+
+`run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay::Array{Int64,1};
+PkgParams::Dict=DefaultPkgParams, PairParams::Dict=DefaultPairParams,
+TestParams::Dict=DefaultTestParams, Incidence::Array{Float64,1} = zeros(length(OccPerDay)),
+Prevalence::Array{Float64,1} = zeros(length(OccPerDay)))`
+
+Function to run the simulation
+
+### Arguments
+
+`Params::Dict` = Parameter dictionary, as well as parameters required for `init_transmission_model` 
+and `setup_transmission_model` this uses the following entries:
+- `Params["is_cohorts"]::Bool` = Whether the employees are sorted into cohorts/teams
+- `Params["NDteams"]::Int` = Number of Driver teams/cohorts used in this simulation
+- `Params["NLteams"]::Int` = Number of Loader teams/cohorts used in this simulation
+- `Params["NOteams"]::Int` = Number of Office teams/cohorts used in this simulatio
+- `Params["CohortChangeRate"]::Float64` = Probability per day of an employee changing cohort/team
+- `Params["TeamTimes"]::Vector{Float64}` = F2F contact time between team members in hours used to calculate infection risk
+- `Params["TeamsOutside"]::Vector{Float64}` = To what extent F2F contacts between team members are outside, used to calculate infection risk
+- `Params["TeamDistances"]::Vector{Float64}` = F2F contact distance between team members in m used to calculate infection risk
+- `Params["outdoor_contact_frac"]`::Float64 [Optional] = The fraction of random contacts that occur outside, used to calculate infection risk
+- `Params["distance"]`::Float64 [Optional] = F2F contact distance in m for random contacts used to calculate infection risk
+- `Params["PairIsolation"]::Bool` [Optional] = Whether close-contact pairs isolate when one isolates
+- `Params["CohortIsolation"]::Bool` [Optional] = Whether whole cohort isolates when one member isolates
+- `Params["CarShareIsolation]::Bool` [Optional] = Whether employees who share transport all isolate when one member isolates
+- `Params["HouseShareIsolation"]::Bool` [Optional] = Whether employees who share a house all isolate when one member isolates
+- `Params["Office_WFH"]::Bool` = Whether office staff are working from home in this simulation
+- `Params["AbsenceRate"]::Float64` = Probability of each individual being absent from work for non-COVID reasons per day
+- `Params["F2F_mod"]::Float64` [Optional] = Multiplier to modify F2F tranmission rate
+- `Params["Aerosol_mod"]::Float64` [Optional] = Multiplier to modify aerosol tranmission rate
+
+`OccPerDay::Array{Float64,1}` = Proportion of staff scheduled to be in work for each day of the 
+    simulation up to maximum simulation length
+
+`NPPerDay::Array{Int64,1}` = Number of packages/items to be delivered in each day of the 
+    simulation up to maximum simulation length
+
+`PkgParams::Dict=DefaultPkgParams` = Parameter dictionary defining the interactions of staff with
+packages. Includes the following elements:
+- `PkgParams["p_fomite_trans"]::Float64` = Probability that handling a package immediately after 
+an infected individual results in a transmission event
+- `PkgParams["Ltime"]::Float64` = Time window for all loading to occur in hours (only required 
+if PkgParams["p_fomite_trans"] > 0)
+- `PkgParams["Dtime"]::Float64` = Time window for all deliveries to occur in hours (only required 
+if PkgParams["p_fomite_trans"] > 0)
+- `PkgParams["PkgHlife"]::Float64` = Half life of viable virus on package surface (only required 
+if PkgParams["p_fomite_trans"] > 0)
+
+`PairParams::Dict=DefaultPairParams` = Parameter dictionary defining whether close-contact pair work
+    is simulated. Includes the following elements:
+- `PairParams["is_driver_pairs"]::Bool` = Whether drivers work in close-contact pairs to perform deliveries
+- `PairParams["is_loader_pairs"]::Bool` = Whether loaders work in close-contact pairs to load packages
+- `PairParams["is_window_open"]::Bool` [Optional] = Whether shared delivery vehicles have the "window-open" modifier (Bool)
+- `PairParams["fixed_driver_pairs"]::Bool` = Whether driver pairings are always the same where possible (only required 
+if `PairParams["is_driver_pairs"]` == true`
+- `PairParams["fixed_loader_pairs"]::Bool` = Whether loader pairings are always the same where possible (only required 
+if `PairParams["is_driver_pairs"]` == true`
+
+`TestParams::Dict=DefaultTestParams` = Parameter dictionary defining testing intervention
+- `TestParams["is_testing"]::Bool` = Whether testing intervention is in place
+- `TestParams["protocol"]::Int` = '1' or '2' to indicate PCR or LFD repeat testing interventions
+- `TestParams["tperiod"]::Int` = Number of days between scheduled tests 
+- `TestParams["specificity"]::Float64` = Probability that a positive test is a true positive
+- `TestParams["delay"]::Float64` = Mean time in days between day of test and result
+- `TestParams["test_miss_prob"]::Float64` = Probability that an individual fails to perform a scheduled test
+- `TestParams["test_pause"]::Float64` = Time in days that a person stops testing after a positive result 
+- `TestParams["testing_enforced"]::Float64` = Whether testing intervention is mandated and forced 
+
+`Incidence::Array{Float64,1} = zeros(length(OccPerDay))` = Array of community incidence values used to simulate rate of workplace introductions
+
+`Prevalence::Array{Float64,1} = zeros(length(OccPerDay))` =  = Array of community incidence values used to simulate risk of introduction via customer contact
+"""
 function run_sim_delivery_wp(Params::Dict, OccPerDay::Array{Float64,1}, NPPerDay::Array{Int64,1};
         PkgParams::Dict=DefaultPkgParams, PairParams::Dict=DefaultPairParams,
         TestParams::Dict=DefaultTestParams, Incidence::Array{Float64,1} = zeros(length(OccPerDay)),

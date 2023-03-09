@@ -1,9 +1,3 @@
-"""How to use the functions in this code
-
-
-
-
-"""
 #include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos_v2.jl")
 include("../../../Viral_load_testing_COV19_model/src/viral_load_infectivity_testpos.jl")
 
@@ -108,25 +102,27 @@ function convert_weight_to_prob(weight::Float64, inf::Float64,
 end
 
 """
-    init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psusc::Float64)
+### Description
+
+`init_transmission_model(N_per_role::Array{Int64,1}, Pisol::Float64, Psusc::Float64)`
 
 Initialises the transmission model.
 
-## Arguments
+### Arguments
 
-`N_per_role` = Array where each entry is the number of employees in a different job role.
+`N_per_role::Array{Int64,1}` = Array where each entry is the number of employees in a different job role. 
 
-`contact_graph` = A graph of contacts (can be updated each day), with the following metadata on the edges:
+`Pisol::Float64` = Probability an individual will isolate due to symptom onset
 
-        `:weights`, a float array of weights listing the duration*transmission rate for each type of contact that occured
+`Psusc::Float64` = Probability an individual is susceptible at simulation start
+        
+`Inc::Array{Float64,1}` = Community incidence values for each day of the simulation 
+                          (vector length defines the maximum length of the simulation)
 
-        `:types`, an integer array (the same size as weights) indicating the type of contact associated with each
+`Prev::Array{Float64,1}` = Community prevalence values for each day of the simulation
+                            (length must match length of `Inc`) 
 
-`Pisol` = Probability an individual will isolate
-
-`Psusc` = Probability an individual is susceptible at simulation start
-
-## Returns:
+### Returns:
 
 `sim::Dict()` = Framework for storing simulation data, to be passed to other functions
 """
@@ -182,6 +178,25 @@ function generate_symp_day_from_time(stime::Float64)
     return Int64(floor(rand(0:1) + stime))
 end
 
+"""
+### Description
+
+`infect_node!(sim::Dict, i::Int, time::Int)`
+
+Function to change a node from susceptible to infected and schedule isolation (if applicable)
+
+### Arguments
+
+`sim::Dict()` = Framework for storing simulation data (returned by  `init_transmission_model`)
+
+`i::Int` = Index of infected node.
+
+`time::Int` = Timestep (day) of infection event
+
+### See also:
+
+[`do_infections_randomly!`](@ref), [`init_transmission_model`](@ref).
+"""
 function infect_node!(sim::Dict, i::Int, time::Int)
     if haskey(sim,"isolation_network")
         contact_tracing_network = sim["isolation_network"]
@@ -253,23 +268,25 @@ end
 
 
 """
-    get_infectivities(sim::Dict, i_day::Int)
+### Description
+
+`get_infectivities(sim::Dict, i_day::Int)`
 
 function to list infectious nodes and their current infectivity
 
-## Arguments
+### Arguments
 
-`sim` = simulation framework (returned by `init_transmission_model`)
+`sim::Dict` = simulation framework (returned by `init_transmission_model`)
 
-## Returns:
+### Returns:
 
-`inf` = List of infectious nodes
+`inf::Array{Int}` = List of infectious nodes
 
-`inf_scales` = Infectivity values for infectious nodes
+`inf_scales::Array{Float64}` = Infectivity values for infectious nodes
 
-## See also
+### See also
 
-`init_transmission_model`
+[`init_transmission_model`](@ref).
 """
 function get_infectivities(sim::Dict, i_day::Int)
     nr = 1:sim["Ntot"]
@@ -343,9 +360,6 @@ function increment_isolations!(sim::Dict, i_day::Int)
     sim["isolation_status_contact_false_test"][isol_leavers] .= false
 end
 
-"""
-
-"""
 function get_introductions(sim::Dict, i_day::Int, introduction_ID::Int;
                            rel_rates::Array{Float64,1} = ones(sim["Njobs"]))
     #doesn't matter if individual is in work or not
@@ -368,7 +382,29 @@ end
 
 
 """
+### Description
 
+`get_network_infections(sim::Dict, i_day::Int)`
+
+Generates all infection events on current day based on contact network and node infectivities/susceptibilities
+
+### Arguments
+
+`sim::Dict` = simulation framework (returned by `init_transmission_model`)
+
+`i_day::Int` = current day number
+
+### Return
+
+`ipairs::Array{Int64,2}` = 3 x N array listing all successful infection events,
+potentially including repeat infections. 
+- Row 1 is infector node index
+- Row 2 is infectee node index
+- Row 3 is the mode of infection (defined in the contact network)
+
+### See also
+
+[`init_transmission_model`](@ref), [`get_infectivities`](@ref).
 """
 function get_network_infections(sim::Dict, i_day::Int)
     inf, inf_scales = get_infectivities(sim, i_day)
@@ -419,7 +455,33 @@ function get_network_infections(sim::Dict, i_day::Int)
 end
 
 """
+### Description
 
+`do_infections_randomly!(infpairs::Array{Int,2}, sim::Dict, i_day::Int)`
+
+Takes the output of `get_network_infections` and filters to remove repeat infections by selecting 
+the successful event at random in the event of repeat infectees. Infections are then applied by calling
+`infect_node!`.
+
+### Arguments
+
+`ipairs::Array{Int64,2}` == 3 x N array listing all successful infection events,
+returned by `get_network_infections`. 
+
+`sim::Dict` = simulation framework (returned by `init_transmission_model`)
+
+`i_day::Int` = current day number
+
+### Return
+
+`infpairs_kept::Array{Int64,2}` = 3 x N array listing final successful infection events
+- Row 1 is infector node index
+- Row 2 is infectee node index
+- Row 3 is the mode of infection (defined in the contact network)
+
+### See also
+
+[`infect_node!`](@ref), [ `init_transmission_model`](@ref), [`get_network_infections`](@ref).
 """
 function do_infections_randomly!(infpairs::Array{Int,2}, sim::Dict, i_day::Int)
     N = size(infpairs,2)
@@ -439,16 +501,45 @@ function do_infections_randomly!(infpairs::Array{Int,2}, sim::Dict, i_day::Int)
 end
 
 """
+### Description
 
+`update_in_work!(sim::Dict, in_work::Array{Bool,1})`
 
+Updates which nodes are in work on the current day
+
+### Arguments
+
+`sim::Dict` = simulation framework (returned by `init_transmission_model`)
+
+`in_work::Array{Bool,1}` =  Boolean vector where true/false entries indicate whether
+    the node with that index is in work that day. This is stored in sim["at_work"]. This may be used
+    is assmebling the contact network but note that the contact network can include contacts 
+    between nodes not in work.
+
+### Return
+
+Null
 """
 function update_in_work!(sim::Dict, in_work::Array{Bool,1})
     sim["at_work"] = in_work
 end
 
 """
+### Description
 
+`update_all_statuses!(sim::Dict, i_day::Int)`
 
+Called after day increment to update node infectivity and isolation statuses
+
+### Arguments
+
+`sim::Dict` = simulation framework (returned by `init_transmission_model`)
+
+`i_dat::Int` = index of current day
+
+### Return
+
+Null
 """
 function update_all_statuses!(sim::Dict, i_day::Int)
     increment_infectivity!(sim, i_day)
@@ -456,17 +547,48 @@ function update_all_statuses!(sim::Dict, i_day::Int)
 end
 
 
-"""update contact network with new version
+"""
+Description
 
+`update_contact_network!(sim::Dict, new_network::MetaGraphs.MetaGraph)`
 
+Updates the contact network sim["contact_network"]
 
+### Arguments
+
+`sim::Dict` = simulation framework (returned by `init_transmission_model`)
+
+`new_network::MetaGraphs.MetaGraph` =  Network object, in MetaGraphs format, must 
+contain the following edge metadata:
+- `:weights` -> a `Vector{Float64,1}` of infection rates associated with each contact between
+    the two nodes `nin` and `nout`. <br>Set using:
+    `set_prop(sim["contact_network"]),nin,nout,:weights,w)`
+    where `w` is the vector of weights, and access using:
+    `get_prop(sim["contact_network"],nin,nout,:weights)`<br>
+- `:types` -> a `Vector{Int64,1}` of indices denoting contact routes for each contact listed in
+    `:weights`. Can be set and accessed in the same way. Note that the lengths of the contact 
+    weights and types MUST BE EQUAL.
+
+### Return
+
+Null
 """
 function update_contact_network!(sim::Dict, new_network::MetaGraphs.MetaGraph)
     sim["contact_network"] = new_network
 end
 
 """
+### Description
 
+`update_testing_state!(sim::Dict, i_day::Int)`
+
+Called after day increment to update testing status (called if testing is being simulated)
+
+### Arguments
+
+`sim::Dict` = simulation framework (returned by `init_transmission_model`)
+
+`i_dat::Int` = index of current day
 """
 function update_testing_state!(sim::Dict, i_day::Int)
     nr = 1:sim["Ntot"]
@@ -476,7 +598,31 @@ function update_testing_state!(sim::Dict, i_day::Int)
 end
 
 """
+### Description
 
+`do_testing!(sim::Dict, testing_params::Dict, i_day::Int, isolation_network::Graph)`
+
+Perform all tests scheduled for current day
+
+### Arguments
+
+`sim::Dict` = simulation framework (returned by `init_transmission_model`)
+
+`testing_params::Dict` = Dict containting parameters for testing model. This function requires:<br>
+- `testing_params["Specificity"]::Float64` = the specificity of the test being used
+
+`i_day::Int` = index of current day
+
+`isolation_network::Graph` = Graph where nodes are all agents and edges define nodes that
+    will be made to isolate if either is infected. Assumed undirected. 
+
+### Returns
+
+`isolators::Array{Int64,1}` = array returned by `apply_positive_tests!`
+
+### See also
+
+[`init_transmission_model`](@ref), [`apply_positive_tests!`](@ref)
 """
 function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
           isolation_network::Graph)
@@ -525,9 +671,6 @@ function do_testing!(sim::Dict, testing_params::Dict, i_day::Int,
     end
 end
 
-"""
-
-"""
 function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_params::Dict, i_day::Int,
                                isolation_network::Graph)
     will_isolate = detected[(sim["will_isolate_with_test"][detected])]
@@ -572,9 +715,6 @@ function apply_positive_tests!(sim::Dict, detected::Array{Int64,1}, testing_para
     return will_isolate
 end
 
-"""
-
-"""
 # function print_infection_network(sim::Dict, fname::String, infpairs::Array{Int64,2},
 #                                  x_pos::Array{Float64,1}, y_pos::Array{Float64,1},
 #                                  pairs::Array{Int64,2} = Array{Int64,2}(undef,2,0))
@@ -641,7 +781,27 @@ end
 # end
 
 """
+### Description
 
+`basic_sim_setup(sim::Dict, i_day::Int64, Ndays::Int64)`
+
+Defines and builds the simulation summary dictionary
+
+### Arguments
+
+`sim::Dict` = simulation framework (returned by `init_transmission_model`)
+
+`i_day::Int` = index of current day
+
+`Ndays::Int64` =  maximum number of days to simulate
+
+### Returns
+
+`summary::Dict` = Dictionary containing keys for simulation summary outputs
+
+### See also
+
+[`init_transmission_model`](@ref)
 """
 function basic_sim_setup(sim::Dict, i_day::Int64, Ndays::Int64)
     Nj = sim["Njobs"]
@@ -675,9 +835,6 @@ function basic_sim_setup(sim::Dict, i_day::Int64, Ndays::Int64)
     return summary
 end
 
-"""
-
-"""
 function sim_setup!(sim::Dict, InfInit::Int64, i_day::Int64, Ndays::Int64)
     index_case = infect_random!(sim,InfInit,i_day)
     sim_summary = basic_sim_setup(sim,i_day,Ndays)
@@ -692,9 +849,6 @@ function sim_setup!(sim::Dict, InfInit::Int64, i_day::Int64, Ndays::Int64)
     return sim_summary
 end
 
-"""
-
-"""
 function scenario_sim_setup!(sim::Dict, i_day::Int64, Ndays::Int64)
 
     sim_summary = basic_sim_setup(sim, i_day, Ndays)
@@ -707,9 +861,6 @@ function scenario_sim_setup!(sim::Dict, i_day::Int64, Ndays::Int64)
     return sim_summary
 end
 
-"""
-
-"""
 function update_sim_summary!(summary::Dict, sim::Dict, inf_pairs::Array{Int64,2}, i_day::Int)
     nr = 1:sim["Ntot"]
     new_isolator_bool = sim["isolation_status"] .* (sim["isolation_time"] .== i_day)
@@ -762,11 +913,6 @@ function update_sim_summary!(summary::Dict, sim::Dict, inf_pairs::Array{Int64,2}
     end
 end
 
-
-
-"""
-
-"""
 function trim_sim_summary!(sim_summary, i_day, Ndays)
     if i_day < Ndays
         for (key,value) in sim_summary
@@ -786,17 +932,41 @@ function trim_sim_summary!(sim_summary, i_day, Ndays)
 end
 
 """
+### Description
 
+`setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict, NDays::Int)`
+
+Setup model based on initialisation
+
+### Arguments
+
+`sim::Dict` = simulation framework (returned by `init_transmission_model`)
+
+`Params::Dict` = Dict containing model parameters. This function requires:
+- `Params["NContactTypes"]::Int` = Number of contact types
+- `Params["SimType"]::Int` = Outbreak_sim (1) or Scenario_sim (2)
+- `Params["InfInit"]::Int` = If Outbreak sim, group that index case is in (0 is random)
+
+`TestParams::Dict` = Dict containting parameters for testing model. This function uses the following args:
+- `TestParams["is_testing"]::Bool` = whether testing or not
+- `TestParams["protocol"]::Int` = `PCR_mass_protocol` (1) or `LFD_mass_protocol` (2) or `LFD_pattern` (3)
+- `TestParams["tperiod"]::Int` = number of days between tests (if protocol is 1 or 2)
+- `TestParams["Pattern"]::Vector{Bool}` = LFD testing pattern (if protocol is 3)
+- `TestParams["testing_enforced"]::Bool` = Whether testing is mandated (so adherence is overidden)
+- `TestParams["policy_adherence"]::Float` = Probability that an individual adheres to (or ignores) testing protocol
+- `TestParams["test_miss_prob"]::Float` = Probability of missing a scheduled test at random (optional, assumed 1 otherwise)
+- `TestParams["sens_rel"]::Float` = Scaling factor for maximum sensitivity (optional, assumed 1 otherwise)
+
+`Ndays::Int` = maximum number of simulation days
+
+### Returns
+
+`sim_summary::Dict` = Dictionary containing keys for simulation summary outputs
+
+`i_day::Int` = Day number for first day of simulation 
+    
+`Anyinf::Bool` = Whether any nodes are infected on first day
 """
-# function simulate_day!(sim::Dict, i_day::Int)
-
-#     #add parts of previous function that go here
-
-
-#     infpairs = get_network_infections(sim::Dict, i_day::Int)
-#     infpairs_reduced = do_infections_randomly!(sim, infpairs)
-
-# end
 function setup_transmission_model!(sim::Dict, Params::Dict, TestParams::Dict,
                                    NDays::Int)
     i_day = rand(1:7)
