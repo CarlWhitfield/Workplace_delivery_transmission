@@ -1,4 +1,3 @@
-
 *.pkl
 *.xlsx
 *.csv
@@ -22,8 +21,7 @@ test_net.jl
 Network_workplace_model/Latest_results*
 Network_workplace_model/Old_results*
 Network_workplace_model/Simple_workplace_model/
-Network_workplace_model/src/test.ipynb
-Network_workplace_model/src/Untitled.ipynb
+Network_workplace_model/src/*.ipynb
 prev_inc.ipynb
 prevalence.ipynb
 Network_workplace_model/src/README.txt
